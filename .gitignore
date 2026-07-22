@@ -1,0 +1,27 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+venv/
+env/
+.env
+
+# PyTorch & Models
+*.pt
+*.pth
+*.ckpt
+saved_models/
+logs/
+visualizations/
+
+# Data & Databases
+data/
+*.csv
+*.sqlite3
+*.db
+crypto_prediction.db
+
+# OS Files
+.DS_Store
+Thumbs.db
