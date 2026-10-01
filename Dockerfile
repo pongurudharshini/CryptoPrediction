@@ -11,8 +11,7 @@ RUN pip install --no-cache-dir -r requirements.txt
 # Copy all your project files into the container
 COPY . .
 
-# Expose the ports for FastAPI (8000) and Streamlit (8501)
-EXPOSE 8000
+# ONLY EXPOSE THE STREAMLIT UI PORT TO THE INTERNET
 EXPOSE 8501
 
 # Create a startup script to run BOTH backend and frontend
