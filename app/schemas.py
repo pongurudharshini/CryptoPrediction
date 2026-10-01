@@ -9,7 +9,7 @@ from typing import List, Dict, Optional
 class PredictionRequest(BaseModel):
     """Schema for requesting a price prediction."""
     symbol: str = Field(..., description="Cryptocurrency ticker symbol (e.g., BTC-USD)", examples=["BTC-USD"])
-    horizon_days: int = Field(default=7, ge=1, le=30, description="Number of days to predict into the future")
+    horizon_days: int = Field(default=30, ge=1, le=90, description="Number of days to predict into the future")
 
 class PredictionResponse(BaseModel):
     """Schema for the prediction output."""
@@ -18,6 +18,7 @@ class PredictionResponse(BaseModel):
     predictions: List[float]
     lower_bound_10: List[float] # 10th percentile (Pessimistic)
     upper_bound_90: List[float] # 90th percentile (Optimistic)
+    quick_forecasts: Optional[Dict[str, float]] = None # NEW: For Hour, Day, Week, Month
     feature_importance: Optional[Dict[str, float]] = None
     insights: Optional[str] = Field(None, description="LLM generated plain-English explanation")
 
