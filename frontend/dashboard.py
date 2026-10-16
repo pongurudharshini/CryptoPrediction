@@ -142,7 +142,7 @@ COIN_100_LIST = [
     {"rank": 52, "name": "Mantle", "symbol": "MNT", "icon": "🏔️"},
     {"rank": 53, "name": "Starknet", "symbol": "STRK", "icon": "⭐"},
     {"rank": 54, "name": "Manta Network", "symbol": "MANTA", "icon": "🐟"},
-    {"rank": 55, "name": "Immutable", "symbol": "IMX", "icon": "🛡️️"},
+    {"rank": 55, "name": "Immutable", "symbol": "IMX", "icon": "🛡"},
     {"rank": 56, "name": "Dai", "symbol": "DAI", "icon": "◈"},
     {"rank": 57, "name": "First Digital USD", "symbol": "FDUSD", "icon": "💵"},
     {"rank": 58, "name": "PayPal USD", "symbol": "PYUSD", "icon": "🅿️"},
@@ -1063,6 +1063,10 @@ Data + AI = Smarter Investment
 """, unsafe_allow_html=True)
 
     with col2:
+        # Added Toggle Theme Button for the First Page
+        st.button("🌓 Toggle Theme", on_click=toggle_theme, key="auth_theme_btn", use_container_width=True)
+        st.markdown("<br>", unsafe_allow_html=True)
+
         tab_login, tab_reg = st.tabs(["Login", "Register"])
         db = SessionLocal()
 
@@ -1560,7 +1564,7 @@ if show_about or st.session_state.get("keep_about_coin", False):
     st.session_state["keep_about_coin"] = True
     dossier = get_coin_deep_dossier(selected_symbol)
     st.markdown("---")
-    with st.expander(f"ℹ️️ Comprehensive Institutional Dossier: {dossier['name']} ({selected_symbol.split('-')[0]})", expanded=True):
+    with st.expander(f"ℹ Comprehensive Institutional Dossier: {dossier['name']} ({selected_symbol.split('-')[0]})", expanded=True):
         a_col1, a_col2 = st.columns([1, 1])
         with a_col1:
             st.markdown(f"""
