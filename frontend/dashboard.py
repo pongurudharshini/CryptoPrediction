@@ -946,35 +946,38 @@ def generate_pdf_report(symbol, current_p, target_p, lower_p10, upper_p90, horiz
 # ==============================================================================
 # --- PAGE 1: AUTH SCREEN ---
 # ==============================================================================
+# ==============================================================================
+# --- PAGE 1: AUTH SCREEN ---
+# ==============================================================================
 def auth_screen():
-    st.markdown("""
+    st.markdown(f"""
 <style>
 /* App background */
-.stApp {
+.stApp {{
 background: linear-gradient(rgba(4, 9, 20, 0.6), rgba(4, 9, 20, 0.8)), 
 url('https://images.unsplash.com/photo-1621416894569-0f39ed31d247?q=80&w=2000&auto=format&fit=crop') center/cover no-repeat fixed !important;
-}
+}}
 /* Main container */
-[data-testid="block-container"] {
+[data-testid="block-container"] {{
 max-width: 1200px !important;
 padding-top: 15vh !important;
-}
+}}
 /* Hide top padding and header */
-header[data-testid="stHeader"] {
+header[data-testid="stHeader"] {{
 display: none !important;
-}
+}}
 /* The Card (Tabs container) */
-[data-testid="stTabs"] {
-background: rgba(13, 20, 36, 0.65) !important;
+[data-testid="stTabs"] {{
+background: rgba(13, 20, 36, 0.85) !important;
 backdrop-filter: blur(16px) !important;
 -webkit-backdrop-filter: blur(16px) !important;
 border: 1px solid rgba(29, 233, 182, 0.4) !important;
 border-radius: 12px !important;
 padding: 40px 30px !important;
 box-shadow: 0 0 30px rgba(29, 233, 182, 0.1) !important;
-}
+}}
 /* Tabs styling */
-[data-testid="stTabs"] button {
+[data-testid="stTabs"] button {{
 background-color: transparent !important;
 color: #64748b !important;
 border: none !important;
@@ -982,38 +985,41 @@ font-weight: 700 !important;
 font-size: 20px !important;
 padding-bottom: 15px !important;
 margin-right: 30px !important;
-}
-[data-testid="stTabs"] button[aria-selected="true"] {
+}}
+[data-testid="stTabs"] button[aria-selected="true"] {{
 color: #ffffff !important;
 border-bottom: 3px solid #1de9b6 !important;
-}
-[data-testid="stTabs"] div[data-baseweb="tab-highlight"] {
+}}
+[data-testid="stTabs"] div[data-baseweb="tab-highlight"] {{
 display: none !important;
-}
-/* Input Fields */
-[data-testid="stTextInput"] label {
+}}
+/* Input Fields - FIXED DYNAMIC THEME */
+[data-testid="stTextInput"] label {{
 display: none !important; 
-}
-[data-testid="stTextInput"] div[data-baseweb="input"] {
-background-color: #0f172a !important;
-border: 1px solid #334155 !important;
+}}
+[data-testid="stTextInput"] div[data-baseweb="baseInput"],
+[data-testid="stTextInput"] div[data-baseweb="input"] {{
+background-color: {theme['bg_main']} !important;
+border: 1px solid {theme['border']} !important;
 border-radius: 8px !important;
-color: white !important;
 transition: border 0.3s ease !important;
-}
-[data-testid="stTextInput"] div[data-baseweb="input"]:focus-within {
+}}
+[data-testid="stTextInput"] div[data-baseweb="input"]:focus-within {{
 border: 1px solid #1de9b6 !important;
 box-shadow: 0 0 8px rgba(29, 233, 182, 0.3) !important;
-}
-[data-testid="stTextInput"] input {
-color: white !important;
+}}
+[data-testid="stTextInput"] input {{
+color: {theme['text_main']} !important;
+-webkit-text-fill-color: {theme['text_main']} !important;
+background-color: transparent !important;
 padding: 16px !important;
-}
-[data-testid="stTextInput"] input::placeholder {
-color: #94a3b8 !important;
-}
+}}
+[data-testid="stTextInput"] input::placeholder {{
+color: {theme['text_sec']} !important;
+-webkit-text-fill-color: {theme['text_sec']} !important;
+}}
 /* Solid Cyan Button */
-[data-testid="stFormSubmitButton"] button {
+[data-testid="stFormSubmitButton"] button {{
 background: #1de9b6 !important;
 border: none !important;
 color: #020617 !important;
@@ -1024,17 +1030,17 @@ padding: 14px 0 !important;
 margin-top: 10px !important;
 transition: all 0.3s ease !important;
 width: 100% !important;
-}
-[data-testid="stFormSubmitButton"] button:hover {
+}}
+[data-testid="stFormSubmitButton"] button:hover {{
 background: #00cba9 !important;
 box-shadow: 0 4px 15px rgba(29, 233, 182, 0.4) !important;
-}
+}}
 /* Remove Form Background */
-[data-testid="stForm"] {
+[data-testid="stForm"] {{
 border: none !important;
 background: transparent !important;
 padding: 0 !important;
-}
+}}
 </style>
 """, unsafe_allow_html=True)
 
@@ -1054,7 +1060,7 @@ padding: 0 !important;
 </svg>
 <h1 style="color: #ffffff; font-weight: 800; font-size: 46px; line-height: 1.25; margin: 0; padding-bottom: 12px;">
 Welcome to AI Driven<br>Cryptocurrency Price Prediction<br>
-<span style="color: #1de9b6;">Using PSO-TFT Predictor</span>
+<span style="color: #1de9b6;">USING PSO-OPTIMIZED MULTIMODAL TEMPORAL FUSION TRANSFORMER WITH REAL-TIME TRADING ANALYTICS</span>
 </h1>
 <p style="color: #e2e8f0; font-size: 22px; font-weight: 400; margin-top: 10px;">
 Data + AI = Smarter Investment
@@ -1063,7 +1069,7 @@ Data + AI = Smarter Investment
 """, unsafe_allow_html=True)
 
     with col2:
-        # Added Toggle Theme Button for the First Page
+        # Toggle Theme Button for the First Page
         st.button("🌓 Toggle Theme", on_click=toggle_theme, key="auth_theme_btn", use_container_width=True)
         st.markdown("<br>", unsafe_allow_html=True)
 
@@ -1533,8 +1539,57 @@ else:
     signal_desc = f"The model projects a downside drop of **{pct_change:.2f}%** by **{target_str}**."
 
 # Executive Summary Metric Cards + Side-by-Side "View Suggestion" & "About the Coin" Buttons
+# Executive Summary Metric Cards + Side-by-Side "View Suggestion" & "About the Coin" Buttons
 col1, col2, col3, col4 = st.columns(4)
-col1.metric("Current Spot Price", format_crypto_price(current_p))
+
+# 🔴 LIVE SECOND-BY-SECOND SPOT PRICE METRIC
+base_sym = selected_symbol.split("-")[0].lower()
+binance_stream = "usdcusdt" if base_sym == "usdt" else f"{base_sym}usdt"
+
+live_price_html = f"""
+<style>body {{ margin: 0; padding: 0; background-color: transparent; overflow: hidden; }}</style>
+<div style="background-color: {theme['bg_sec']}; padding: 14px 15px; border-radius: 10px; border: 1px solid {theme['border']}; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; box-sizing: border-box; height: 95px; display: flex; flex-direction: column; justify-content: center;">
+    <div style="color: {theme['text_sec']}; font-size: 14px; margin-bottom: 4px; font-weight: 400;">
+        Current Spot Price <span id="pulse" style="color: #f85149; font-size: 10px; font-weight: 700; margin-left: 5px;">🔴 LIVE</span>
+    </div>
+    <div id="live_spot_price" style="color: {theme['text_main']}; font-size: 1.8rem; font-weight: 600; transition: color 0.3s ease; line-height: 1.2;">
+        {format_crypto_price(current_p)}
+    </div>
+</div>
+<script>
+    const priceEl = document.getElementById('live_spot_price');
+    const pulseEl = document.getElementById('pulse');
+    let lastPrice = {current_p};
+    
+    const ws = new WebSocket('wss://stream.binance.com:9443/ws/{binance_stream}@ticker');
+    ws.onmessage = function(event) {{
+        const data = JSON.parse(event.data);
+        const price = parseFloat(data.c);
+        
+        let formattedPrice = "$0.00";
+        if(price < 0.0001) formattedPrice = "$" + price.toFixed(8);
+        else if(price < 1.0) formattedPrice = "$" + price.toFixed(4);
+        else if(price < 10.0) formattedPrice = "$" + price.toFixed(3);
+        else formattedPrice = "$" + price.toLocaleString('en-US', {{minimumFractionDigits: 2, maximumFractionDigits: 2}});
+        
+        priceEl.innerText = formattedPrice;
+        
+        // Flash Green or Red on tick
+        if (price > lastPrice) {{ priceEl.style.color = '#3fb950'; }}
+        else if (price < lastPrice) {{ priceEl.style.color = '#f85149'; }}
+        
+        setTimeout(() => {{ priceEl.style.color = '{theme['text_main']}'; }}, 400);
+        lastPrice = price;
+    }};
+    
+    // Blink the LIVE indicator
+    setInterval(() => {{ pulseEl.style.opacity = (pulseEl.style.opacity == 1 ? 0.3 : 1); }}, 800);
+</script>
+"""
+
+with col1:
+    components.html(live_price_html, height=105)
+
 with col2:
     st.metric(f"Predicted Price ({forecast_horizon}D)", format_crypto_price(pred_final), format_delta(current_p, pred_final))
     sub_b1, sub_b2 = st.columns(2)
