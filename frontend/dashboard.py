@@ -1060,7 +1060,7 @@ padding: 0 !important;
 </svg>
 <h1 style="color: #ffffff; font-weight: 800; font-size: 46px; line-height: 1.25; margin: 0; padding-bottom: 12px;">
 Welcome to AI Driven<br>Cryptocurrency Price Prediction<br>
-<span style="color: #1de9b6;">USING PSO-OPTIMIZED MULTIMODAL TEMPORAL FUSION TRANSFORMER WITH REAL-TIME TRADING ANALYTICS</span>
+<span style="color: #1de9b6;">USING PSO-OPTIMIZED MULTIMODAL TFT WITH REAL-TIME TRADING ANALYTICS</span>
 </h1>
 <p style="color: #e2e8f0; font-size: 22px; font-weight: 400; margin-top: 10px;">
 Data + AI = Smarter Investment
