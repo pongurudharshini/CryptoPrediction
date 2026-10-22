@@ -1744,9 +1744,11 @@ with t1:
     # --- Live Real-Time Tracking ---
     st.subheader(f"🔴 Live Second-by-Second Market Feed ({selected_symbol})")
     
-    # Advanced logic to bypass TradingView's symbol resolution failures for Altcoins/Stablecoins
+    # Advanced logic to bypass TradingView's symbol resolution failures
     base_tv = selected_symbol.split('-')[0].upper()
-    tv_symbol = "CRYPTO:USDTUSD" if base_tv == "USDT" else f"{base_tv}USDT"
+    
+    # EXPLICITLY telling TradingView to use the Binance feed to prevent blank screens
+    tv_symbol = "CRYPTO:USDTUSD" if base_tv == "USDT" else f"BINANCE:{base_tv}USDT"
     
     tradingview_html = f"""
     <div class="tradingview-widget-container" style="height:520px;width:100%;">
@@ -1759,12 +1761,12 @@ with t1:
         "interval": "1",
         "timezone": "Asia/Kolkata",
         "theme": "{theme['tv_theme']}",
-        "style": "3",
+        "style": "1",  // Changed to 1 for Professional Candlesticks
         "locale": "en",
         "backgroundColor": "{theme['bg_main']}",
         "gridColor": "{theme['border']}",
-        "hide_top_toolbar": true,
-        "hide_legend": true,
+        "hide_top_toolbar": false, // Showing toolbar so users can change timeframes
+        "hide_legend": false,
         "enable_publishing": false,
         "allow_symbol_change": false,
         "save_image": false,
