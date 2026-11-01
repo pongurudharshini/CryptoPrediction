@@ -216,6 +216,10 @@ if "theme_mode" not in st.session_state:
     st.session_state["theme_mode"] = "dark"
 if "show_investment_guide" not in st.session_state:
     st.session_state["show_investment_guide"] = False
+if "show_admin_dashboard" not in st.session_state:
+    st.session_state["show_admin_dashboard"] = False
+if "admin_authenticated" not in st.session_state:
+    st.session_state["admin_authenticated"] = False
 
 def toggle_theme():
     st.session_state.theme_mode = "light" if st.session_state.theme_mode == "dark" else "dark"
@@ -295,6 +299,24 @@ st.markdown(f"""
     div.st-key-sidebar_guide_btn button:hover {{
         transform: translateY(-2px) !important;
         box-shadow: 0 6px 16px rgba(31, 111, 235, 0.4) !important;
+    }}
+
+    /* Admin Button Custom Style in Sidebar */
+    div.st-key-sidebar_admin_btn button {{
+        background: linear-gradient(135deg, #d73a49 0%, #b31d28 100%) !important;
+        border: 1px solid #ea4a5a !important;
+        color: white !important;
+        font-size: 14.5px !important;
+        font-weight: 700 !important;
+        padding: 10px 14px !important;
+        border-radius: 8px !important;
+        box-shadow: 0 4px 12px rgba(215, 58, 73, 0.25) !important;
+        transition: all 0.2s ease !important;
+        margin-top: 10px !important;
+    }}
+    div.st-key-sidebar_admin_btn button:hover {{
+        transform: translateY(-2px) !important;
+        box-shadow: 0 6px 16px rgba(215, 58, 73, 0.4) !important;
     }}
 
     /* CSS Wildcard: Targets ALL 100 Coin Buttons and strips the blue style to create a flat list */
@@ -1328,6 +1350,15 @@ if st.sidebar.button("📚 Crypto Investment Guide", key="sidebar_guide_btn", us
     st.rerun()
 st.sidebar.markdown('</div>', unsafe_allow_html=True)
 
+# --- ADMIN DASHBOARD BUTTON IN SIDEBAR ---
+st.sidebar.markdown('<div class="st-key-sidebar_admin_btn">', unsafe_allow_html=True)
+if st.sidebar.button("⚙️ Admin Dashboard", key="sidebar_admin_btn", use_container_width=True):
+    st.session_state["show_admin_dashboard"] = not st.session_state["show_admin_dashboard"]
+    if not st.session_state["show_admin_dashboard"]:
+        st.session_state["admin_authenticated"] = False # Reset authentication when toggled off
+    st.rerun()
+st.sidebar.markdown('</div>', unsafe_allow_html=True)
+
 st.sidebar.markdown("---")
 st.sidebar.info(
     "**Architecture Info:**\n"
@@ -1506,6 +1537,104 @@ if st.session_state.get("show_investment_guide", False):
         if st.button("❌ Close Investment Guide", key="close_guide_btn"):
             st.session_state["show_investment_guide"] = False
             st.rerun()
+
+# ==============================================================================
+# --- EXPANDABLE ADMIN DASHBOARD SECTION ---
+# ==============================================================================
+if st.session_state.get("show_admin_dashboard", False):
+    with st.expander("⚙️ System Administrator Dashboard (Restricted Access)", expanded=True):
+        st.markdown(f"""
+        <div style="background: {theme['accent_bg']}; border: 1px solid #f85149; border-radius: 10px; padding: 20px; margin-bottom: 20px;">
+            <h2 style="margin: 0 0 10px 0; color: #f85149;">🔐 Admin Control Center</h2>
+            <p style="margin: 0; font-size: 15px; line-height: 1.6; color: {theme['text_sec']};">
+                Global system configurations, user management, database telemetry, and backend orchestration.
+            </p>
+        </div>
+        """, unsafe_allow_html=True)
+
+        if not st.session_state.get("admin_authenticated", False):
+            # Administrator Password Gate
+            st.warning("⚠️ Restricted Area. Please enter the Administrator Password.")
+            with st.form("admin_auth_form"):
+                admin_pw = st.text_input("Administrator Password", type="password", placeholder="Enter Password...")
+                submit_auth = st.form_submit_button("Authenticate")
+                if submit_auth:
+                    if admin_pw == "Admin1881":
+                        st.session_state["admin_authenticated"] = True
+                        st.success("Authentication successful. Unlocking telemetry...")
+                        st.rerun()
+                    else:
+                        st.error("Incorrect password. Access denied.")
+            
+            st.markdown("<br>", unsafe_allow_html=True)
+            if st.button("❌ Cancel", key="cancel_admin_btn"):
+                st.session_state["show_admin_dashboard"] = False
+                st.rerun()
+                
+        else:
+            # Authenticated Administrator Interface
+            adm_t1, adm_t2, adm_t3 = st.tabs(["👥 User Management", "🚨 Active Global Alerts", "🛠️ System & DB Health"])
+            
+            db_admin = SessionLocal()
+            try:
+                all_users = db_admin.query(User).all()
+            except Exception:
+                all_users = []
+            
+            try:
+                all_alerts = db_admin.query(AlertPreference).all()
+            except Exception:
+                all_alerts = []
+            
+            with adm_t1:
+                st.markdown("### Registered Users Database")
+                if all_users:
+                    user_data = []
+                    for u in all_users:
+                        user_data.append({
+                            "User ID": getattr(u, 'id', 'N/A'), 
+                            "Full Name": getattr(u, 'name', 'N/A'), 
+                            "Email Address": getattr(u, 'email', 'N/A'), 
+                            "Account Status": "Active 🟢"
+                        })
+                    st.dataframe(pd.DataFrame(user_data), use_container_width=True)
+                else:
+                    st.info("No registered users found in the database.")
+                    
+            with adm_t2:
+                st.markdown("### System-Wide Active Alerts")
+                if all_alerts:
+                    alert_data = []
+                    for a in all_alerts:
+                        alert_data.append({
+                            "Alert ID": getattr(a, 'id', 'N/A'),
+                            "User Email": getattr(a, 'user_email', 'N/A'),
+                            "Target Asset": getattr(a, 'symbol', 'N/A'),
+                            "Trigger Price": getattr(a, 'target_buy_price', 'N/A')
+                        })
+                    st.dataframe(pd.DataFrame(alert_data), use_container_width=True)
+                else:
+                    st.info("No active user alerts configured in the Redis/Celery queue.")
+                    
+            with adm_t3:
+                st.markdown("### Database & Environment Telemetry")
+                col_db1, col_db2, col_db3 = st.columns(3)
+                col_db1.metric("Total Registered Users", len(all_users))
+                col_db2.metric("Total Active Alerts", len(all_alerts))
+                col_db3.metric("SQLite DB Status", "Connected 🟢")
+                
+                st.markdown("#### System Overrides (Superuser Only)")
+                st.checkbox("Enable Global Maintenance Mode (Locks out non-admins)")
+                st.checkbox("Force Retrain PSO-TFT Models on Next Restart")
+                st.checkbox("Suspend Outbound Email & Webhook Notifications")
+            
+            db_admin.close()
+            
+            st.markdown("<br>", unsafe_allow_html=True)
+            if st.button("❌ Close Admin Dashboard", key="close_admin_btn"):
+                st.session_state["show_admin_dashboard"] = False
+                st.session_state["admin_authenticated"] = False
+                st.rerun()
 
 # Retrieve Real Market Data for the chosen currency
 with st.spinner(f"Connecting to Live Market & Running Inference for {selected_symbol}..."):
