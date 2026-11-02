@@ -2223,7 +2223,7 @@ with t3:
             "CatBoost", 
             "LightGBM", 
             "TCN (Temporal Convolutional Networks)", 
-            "GRU Baseline", 
+            "DLinear / NLinear", 
             "PSO-TFT + ST-GNN (Ours)"
         ],
         "MAE ($)": ["245.20", "234.10", "165.00", "150.70", "**84.30**"],
