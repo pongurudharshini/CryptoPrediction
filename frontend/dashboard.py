@@ -7,12 +7,8 @@ Features:
 - Real-Time Market Data Engine for all 100 Cryptocurrencies (Automatic API & yfinance Fallback)
 - Dedicated "About the Coin" Institutional Analysis (Founder, Purpose, Architecture, Past & Future Demand)
 - Comprehensive "Crypto Investment Guide" for Beginners & Institutional Traders
-- Macro-Economic & Liquidity Engine (DXY, S&P 500 Correlation, Fed Net Liquidity, 10Y Yields)
-- Multi-Asset Portfolio Optimizer (Markowitz Efficient Frontier & Black-Litterman Bayesian Views)
-- Monte Carlo Stress Testing & Scenario Simulator (1,000 Paths, VaR 95/99, CVaR, Historical Shocks)
 - Telegram & Discord Automated Webhook Alert Bots with Dynamic Contextual Setup Guides
 - Side-by-Side Dual Asset Comparison Mode (Trajectory, VSN Explainability, Sentiment)
-- Liquidation Heatmap & Perpetual Funding Rate Tracker (Leverage Squeeze Meter & Wall Clusters)
 - Cross-Currency Graph Transformers & Market Spillover Matrix (Singh & Bhat, 2024)
 - AI Copilot 2-Sentence Natural Language Summary Banner on Main Dashboard
 - High-Performance Charting with Interactive Overlay Toggles (Forecast, Bounds, Signals, SMAs)
@@ -27,8 +23,6 @@ Features:
 - Historical Candlestick Explorer, VSN Explainability, Sentiment Gauges, & Benchmarks
 - NLP Sentiment Engine: Scrapes Crypto News, X/Reddit to weight model confidence.
 - Multimodal LLM Fusion: FinBERT + Cross-Attention for deep semantic context.
-- Order Book & Microstructure: Displays bid-ask spread dynamics and Order Flow Imbalance (OFI).
-- On-Chain Analytics: Active wallet addresses, exchange net inflows/outflows, and whale activity.
 - Automated Feature Pipeline: RSI, MACD, Bollinger Bands, MA crossovers, and BTC dominance.
 - Dynamic Threshold Engine: Multi-variable async alerts (Celery/Redis architecture).
 - Diebold-Mariano Statistical Significance Test: Heatmap validating forecasting superiority.
@@ -85,6 +79,20 @@ st.set_page_config(
     layout="wide",
     initial_sidebar_state="expanded"
 )
+
+# --- GLOBAL CURRENCIES DICTIONARY ---
+CURRENCIES = {
+    "USD": {"symbol": "$", "rate": 1.0, "name": "United States Dollar"},
+    "INR": {"symbol": "₹", "rate": 83.5, "name": "Indian Rupee"},
+    "EUR": {"symbol": "€", "rate": 0.92, "name": "Euro (used across the European Union)"},
+    "JPY": {"symbol": "¥", "rate": 150.0, "name": "Japanese Yen"},
+    "GBP": {"symbol": "£", "rate": 0.79, "name": "British Pound Sterling"},
+    "AUD": {"symbol": "A$", "rate": 1.52, "name": "Australian Dollar"},
+    "CAD": {"symbol": "C$", "rate": 1.37, "name": "Canadian Dollar"},
+    "KRW": {"symbol": "₩", "rate": 1350.0, "name": "South Korean Won"},
+    "TRY": {"symbol": "₺", "rate": 32.0, "name": "Turkish Lira"},
+    "BRL": {"symbol": "R$", "rate": 5.1, "name": "Brazilian Real"}
+}
 
 # --- 100 INSTITUTIONAL CRYPTOCURRENCIES LIST (Ranked 1-100) ---
 COIN_100_LIST = [
@@ -220,6 +228,12 @@ if "show_admin_dashboard" not in st.session_state:
     st.session_state["show_admin_dashboard"] = False
 if "admin_authenticated" not in st.session_state:
     st.session_state["admin_authenticated"] = False
+if "selected_currency" not in st.session_state:
+    st.session_state["selected_currency"] = "USD"
+
+curr_key = st.session_state["selected_currency"]
+curr_rate = CURRENCIES.get(curr_key, {"rate": 1.0})["rate"]
+curr_sym = CURRENCIES.get(curr_key, {"symbol": "$"})["symbol"]
 
 def toggle_theme():
     st.session_state.theme_mode = "light" if st.session_state.theme_mode == "dark" else "dark"
@@ -398,17 +412,22 @@ st.markdown(f"""
 API_BASE_URL = "http://127.0.0.1:8000/api/v1"
 
 def format_crypto_price(val: float) -> str:
-    """Dynamic precision formatter supporting micro-cap to high-value assets."""
+    """Dynamic precision formatter supporting micro-cap to high-value assets with currency conversion."""
     if val is None or val == 0:
-        return "$0.00"
-    abs_val = abs(val)
+        val = 0.0
+        
+    converted = val * curr_rate
+    
+    abs_val = abs(converted)
+    if abs_val == 0:
+        return f"{curr_sym}0.00"
     if abs_val < 0.0001:
-        return f"${val:,.8f}"
+        return f"{curr_sym}{converted:,.8f}"
     if abs_val < 1.0:
-        return f"${val:,.4f}"
+        return f"{curr_sym}{converted:,.4f}"
     if abs_val < 10.0:
-        return f"${val:,.3f}"
-    return f"${val:,.2f}"
+        return f"{curr_sym}{converted:,.3f}"
+    return f"{curr_sym}{converted:,.2f}"
 
 def format_delta(current: float, target: float) -> str:
     diff = target - current
@@ -846,9 +865,9 @@ def run_strategy_backtest(df: pd.DataFrame, initial_capital: float = 10000.0, fe
             trades.append({
                 "Entry Date": entry_date.strftime("%Y-%m-%d"),
                 "Exit Date": date.strftime("%Y-%m-%d"),
-                "Entry Price ($)": format_crypto_price(entry_price),
-                "Exit Price ($)": format_crypto_price(price),
-                "PnL ($)": round(pnl, 2),
+                f"Entry Price ({curr_sym})": format_crypto_price(entry_price),
+                f"Exit Price ({curr_sym})": format_crypto_price(price),
+                f"PnL ({curr_sym})": round(pnl * curr_rate, 2), # Adjusted PnL calculation strictly for log display
                 "Return (%)": round(ret_pct, 2)
             })
             holdings = 0.0
@@ -870,11 +889,12 @@ def run_strategy_backtest(df: pd.DataFrame, initial_capital: float = 10000.0, fe
     max_drawdown = abs(drawdown.min()) * 100
     
     if trades:
-        winning_trades = [t for t in trades if t['PnL ($)'] > 0]
-        losing_trades = [t for t in trades if t['PnL ($)'] <= 0]
+        pnl_key = f"PnL ({curr_sym})"
+        winning_trades = [t for t in trades if t[pnl_key] > 0]
+        losing_trades = [t for t in trades if t[pnl_key] <= 0]
         win_rate = (len(winning_trades) / len(trades)) * 100
-        gross_profit = sum(t['PnL ($)'] for t in winning_trades)
-        gross_loss = abs(sum(t['PnL ($)'] for t in losing_trades))
+        gross_profit = sum(t[pnl_key] for t in winning_trades)
+        gross_loss = abs(sum(t[pnl_key] for t in losing_trades))
         profit_factor = (gross_profit / gross_loss) if gross_loss > 0 else (gross_profit if gross_profit > 0 else 1.0)
     else:
         win_rate, profit_factor = 0.0, 0.0
@@ -973,13 +993,13 @@ def auth_screen():
 <style>
 /* App background */
 .stApp {{
-background: linear-gradient(rgba(4, 9, 20, 0.6), rgba(4, 9, 20, 0.8)), 
+background: linear-gradient(rgba(4, 9, 20, 0.7), rgba(4, 9, 20, 0.8)), 
 url('https://images.unsplash.com/photo-1621416894569-0f39ed31d247?q=80&w=2000&auto=format&fit=crop') center/cover no-repeat fixed !important;
 }}
 /* Main container */
 [data-testid="block-container"] {{
 max-width: 1200px !important;
-padding-top: 15vh !important;
+padding-top: 12vh !important;
 }}
 /* Hide top padding and header */
 header[data-testid="stHeader"] {{
@@ -987,26 +1007,26 @@ display: none !important;
 }}
 /* The Card (Tabs container) */
 [data-testid="stTabs"] {{
-background: rgba(13, 20, 36, 0.85) !important;
-backdrop-filter: blur(16px) !important;
--webkit-backdrop-filter: blur(16px) !important;
-border: 1px solid rgba(29, 233, 182, 0.4) !important;
-border-radius: 12px !important;
-padding: 40px 30px !important;
-box-shadow: 0 0 30px rgba(29, 233, 182, 0.1) !important;
+background: rgba(13, 20, 36, 0.4) !important;
+backdrop-filter: blur(12px) !important;
+-webkit-backdrop-filter: blur(12px) !important;
+border: 1.5px solid rgba(29, 233, 182, 0.6) !important;
+border-radius: 16px !important;
+padding: 35px 35px !important;
+box-shadow: 0 0 40px rgba(29, 233, 182, 0.15), inset 0 0 20px rgba(29, 233, 182, 0.05) !important;
 }}
 /* Tabs styling */
 [data-testid="stTabs"] button {{
 background-color: transparent !important;
 color: #64748b !important;
 border: none !important;
-font-weight: 700 !important;
-font-size: 20px !important;
-padding-bottom: 15px !important;
-margin-right: 30px !important;
+font-weight: 600 !important;
+font-size: 16px !important;
+padding-bottom: 10px !important;
+margin-right: 20px !important;
 }}
 [data-testid="stTabs"] button[aria-selected="true"] {{
-color: #ffffff !important;
+color: #1de9b6 !important;
 border-bottom: 3px solid #1de9b6 !important;
 }}
 [data-testid="stTabs"] div[data-baseweb="tab-highlight"] {{
@@ -1018,8 +1038,8 @@ display: none !important;
 }}
 [data-testid="stTextInput"] div[data-baseweb="baseInput"],
 [data-testid="stTextInput"] div[data-baseweb="input"] {{
-background-color: {theme['bg_main']} !important;
-border: 1px solid {theme['border']} !important;
+background-color: rgba(4, 9, 20, 0.6) !important;
+border: 1px solid rgba(255, 255, 255, 0.1) !important;
 border-radius: 8px !important;
 transition: border 0.3s ease !important;
 }}
@@ -1028,31 +1048,33 @@ border: 1px solid #1de9b6 !important;
 box-shadow: 0 0 8px rgba(29, 233, 182, 0.3) !important;
 }}
 [data-testid="stTextInput"] input {{
-color: {theme['text_main']} !important;
--webkit-text-fill-color: {theme['text_main']} !important;
+color: #ffffff !important;
+-webkit-text-fill-color: #ffffff !important;
 background-color: transparent !important;
-padding: 16px !important;
+padding: 14px 16px !important;
+font-size: 14px !important;
 }}
 [data-testid="stTextInput"] input::placeholder {{
-color: {theme['text_sec']} !important;
--webkit-text-fill-color: {theme['text_sec']} !important;
+color: #64748b !important;
+-webkit-text-fill-color: #64748b !important;
 }}
 /* Solid Cyan Button */
 [data-testid="stFormSubmitButton"] button {{
-background: #1de9b6 !important;
-border: none !important;
-color: #020617 !important;
-border-radius: 8px !important;
-font-weight: 800 !important;
-font-size: 18px !important;
-padding: 14px 0 !important;
-margin-top: 10px !important;
+background: linear-gradient(90deg, #187b64 0%, #209d82 100%) !important;
+border: 1px solid #23a98c !important;
+color: #ffffff !important;
+border-radius: 30px !important;
+font-weight: 600 !important;
+font-size: 16px !important;
+padding: 10px 0 !important;
+margin-top: 15px !important;
 transition: all 0.3s ease !important;
 width: 100% !important;
+box-shadow: 0 4px 15px rgba(29, 233, 182, 0.2) !important;
 }}
 [data-testid="stFormSubmitButton"] button:hover {{
-background: #00cba9 !important;
-box-shadow: 0 4px 15px rgba(29, 233, 182, 0.4) !important;
+background: linear-gradient(90deg, #209d82 0%, #29c1a1 100%) !important;
+box-shadow: 0 4px 20px rgba(29, 233, 182, 0.4) !important;
 }}
 /* Remove Form Background */
 [data-testid="stForm"] {{
@@ -1060,37 +1082,77 @@ border: none !important;
 background: transparent !important;
 padding: 0 !important;
 }}
+/* Toggle theme button styling */
+.st-key-auth_theme_btn > button {{
+    background: rgba(13, 20, 36, 0.6) !important;
+    border: 1px solid rgba(255, 255, 255, 0.15) !important;
+    border-radius: 30px !important;
+    color: white !important;
+    width: 100% !important;
+    margin-bottom: 15px !important;
+    font-weight: 500 !important;
+    padding: 6px 12px !important;
+}}
+/* Switch to register text styling */
+.st-key-switch_to_reg_btn > button {{
+    background: transparent !important;
+    border: none !important;
+    color: #8b949e !important;
+    font-size: 12px !important;
+    font-weight: 400 !important;
+    margin-top: 0px !important;
+    box-shadow: none !important;
+}}
+.st-key-switch_to_reg_btn > button:hover {{
+    color: #1de9b6 !important;
+}}
 </style>
+
+<!-- Top Right User Icon -->
+<div style="position: fixed; top: 20px; right: 20px; z-index: 999999;">
+    <div style="background: rgba(255,255,255,0.1); border-radius: 50%; width: 40px; height: 40px; display: flex; align-items: center; justify-content: center; border: 1px solid rgba(255,255,255,0.2);">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></svg>
+    </div>
+</div>
 """, unsafe_allow_html=True)
 
-    col1, col_spacer, col2 = st.columns([1.2, 0.1, 0.9])
+    col1, col_spacer, col2 = st.columns([1.1, 0.1, 0.9])
 
     with col1:
         st.markdown("""
-<div style="font-family: 'Inter', 'Segoe UI', sans-serif;">
-<svg width="70" height="70" viewBox="0 0 24 24" fill="none" stroke="#1de9b6" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="margin-bottom: 25px;">
-<path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path>
-<polyline points="3.27 6.96 12 12.01 20.73 6.96"></polyline>
-<line x1="12" y1="22.08" x2="12" y2="12"></line>
-<rect x="9" y="9" width="6" height="6" rx="1"></rect>
-<circle cx="12" cy="18" r="1.5"></circle>
-<circle cx="6.5" cy="10" r="1.5"></circle>
-<circle cx="17.5" cy="10" r="1.5"></circle>
-</svg>
-<h1 style="color: #ffffff; font-weight: 800; font-size: 46px; line-height: 1.25; margin: 0; padding-bottom: 12px;">
-Welcome to AI Driven<br>Cryptocurrency Price Prediction<br>
-<span style="color: #1de9b6;">USING PSO-OPTIMIZED MULTIMODAL TFT WITH REAL-TIME TRADING ANALYTICS</span>
-</h1>
-<p style="color: #e2e8f0; font-size: 22px; font-weight: 400; margin-top: 10px;">
-Data + AI = Smarter Investment
-</p>
+<div style="font-family: 'Inter', 'Segoe UI', sans-serif; margin-top: 10px;">
+    <!-- Glowing Geometric Lion Logo -->
+    <div style="margin-bottom: 30px; filter: drop-shadow(0 0 10px rgba(29,233,182,0.8));">
+        <svg width="60" height="60" viewBox="0 0 24 24" fill="none" stroke="#1de9b6" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M12 2L16 6H20V10L22 12L20 14V18H16L12 22L8 18H4V14L2 12L4 10V6H8L12 2Z"></path>
+            <path d="M12 2V22"></path>
+            <path d="M22 12H2"></path>
+            <path d="M16 6L8 18"></path>
+            <path d="M8 6L16 18"></path>
+        </svg>
+    </div>
+    <h1 style="color: #ffffff; font-weight: 800; font-size: 36px; line-height: 1.3; margin: 0; text-transform: uppercase;">
+        WELCOME TO AI-DRIVEN<br>CRYPTOCURRENCY PRICE PREDICTION
+    </h1>
+    <h2 style="color: #1de9b6; font-weight: 700; font-size: 24px; line-height: 1.3; margin: 15px 0 20px 0; text-transform: uppercase;">
+        USING PSO-OPTIMIZED<br>MULTIMODAL TFT WITH REAL-TIME<br>TRADING ANALYTICS
+    </h2>
+    <p style="color: #e2e8f0; font-size: 18px; font-weight: 400; margin-bottom: 35px;">
+        Data + AI = Smarter Investment
+    </p>
+</div>
+""", unsafe_allow_html=True)
+
+        st.markdown("""
+<div style="display: flex; gap: 15px; font-size: 14px; color: #a1a1aa; font-weight: 500;">
+    <span>[ <span style="color: #f59e0b;">🔶</span> Binance L2 Live ]</span>
+    <span>[ <span style="color: #3b82f6;">🔷</span> PyTorch Deep Learning ]</span>
 </div>
 """, unsafe_allow_html=True)
 
     with col2:
         # Toggle Theme Button for the First Page
         st.button("🌓 Toggle Theme", on_click=toggle_theme, key="auth_theme_btn", use_container_width=True)
-        st.markdown("<br>", unsafe_allow_html=True)
 
         tab_login, tab_reg = st.tabs(["Login", "Register"])
         db = SessionLocal()
@@ -1113,6 +1175,11 @@ Data + AI = Smarter Investment
                         st.rerun()
                     else:
                         st.error("Invalid email or password.")
+            
+            st.markdown("<br>", unsafe_allow_html=True)
+            if st.button("New user? Register here", key="switch_to_reg_btn", use_container_width=True):
+                st.session_state["switch_to_register"] = True
+                st.rerun()
 
         with tab_reg:
             with st.form("register_form"):
@@ -1133,8 +1200,34 @@ Data + AI = Smarter Investment
                             "🚀 Welcome to PSO-TFT Predictor!",
                             f"Hi {new_name}, your account is active. Explore our 100-cryptocurrency AI price forecasting and backtesting suite."
                         )
-                        st.success("Registration successful! Please login to continue.")
+                        st.toast("Registration successful! Logging you in...", icon="✅")
+                        st.session_state["logged_in"] = True
+                        st.session_state["user_name"] = new_name
+                        st.session_state["user_email"] = new_email
+                        st.session_state["coin_selected"] = False
+                        time.sleep(1)
+                        st.rerun()
         db.close()
+        
+        if st.session_state.get("switch_to_register", False):
+            st.session_state["switch_to_register"] = False
+            components.html(
+                """
+                <script>
+                setTimeout(function() {
+                    const doc = window.parent.document;
+                    const tabs = doc.querySelectorAll('button[role="tab"], button[data-baseweb="tab"], div[data-testid="stTabs"] button');
+                    for(let i = 0; i < tabs.length; i++) {
+                        if(tabs[i].innerText.includes("Register")) {
+                            tabs[i].click();
+                            break;
+                        }
+                    }
+                }, 100);
+                </script>
+                """,
+                height=0, width=0
+            )
 
 if not st.session_state["logged_in"]:
     auth_screen()
@@ -1684,18 +1777,20 @@ live_price_html = f"""
 <script>
     const priceEl = document.getElementById('live_spot_price');
     const pulseEl = document.getElementById('pulse');
-    let lastPrice = {current_p};
+    const exchangeRate = {curr_rate};
+    const currencySymbol = '{curr_sym}';
+    let lastPrice = {current_p} * exchangeRate;
     
     const ws = new WebSocket('wss://stream.binance.com:9443/ws/{binance_stream}@ticker');
     ws.onmessage = function(event) {{
         const data = JSON.parse(event.data);
-        const price = parseFloat(data.c);
+        const price = parseFloat(data.c) * exchangeRate;
         
-        let formattedPrice = "$0.00";
-        if(price < 0.0001) formattedPrice = "$" + price.toFixed(8);
-        else if(price < 1.0) formattedPrice = "$" + price.toFixed(4);
-        else if(price < 10.0) formattedPrice = "$" + price.toFixed(3);
-        else formattedPrice = "$" + price.toLocaleString('en-US', {{minimumFractionDigits: 2, maximumFractionDigits: 2}});
+        let formattedPrice = currencySymbol + "0.00";
+        if(price < 0.0001) formattedPrice = currencySymbol + price.toFixed(8);
+        else if(price < 1.0) formattedPrice = currencySymbol + price.toFixed(4);
+        else if(price < 10.0) formattedPrice = currencySymbol + price.toFixed(3);
+        else formattedPrice = currencySymbol + price.toLocaleString('en-US', {{minimumFractionDigits: 2, maximumFractionDigits: 2}});
         
         priceEl.innerText = formattedPrice;
         
@@ -1714,6 +1809,18 @@ live_price_html = f"""
 
 with col1:
     components.html(live_price_html, height=105)
+    
+    with st.popover("🔀 Select Currency", use_container_width=True):
+        curr_options = [f"{k}: {v['name']}" for k, v in CURRENCIES.items()]
+        current_display = f"{curr_key}: {CURRENCIES[curr_key]['name']}"
+        idx = curr_options.index(current_display)
+        
+        selected_display = st.selectbox("Display Currency", options=curr_options, index=idx, label_visibility="collapsed")
+        selected_code = selected_display.split(":")[0]
+        
+        if selected_code != curr_key:
+            st.session_state["selected_currency"] = selected_code
+            st.rerun()
 
 with col2:
     st.metric(f"Predicted Price ({forecast_horizon}D)", format_crypto_price(pred_final), format_delta(current_p, pred_final))
@@ -1949,17 +2056,17 @@ with t1:
     fig = go.Figure()
     
     if show_bounds:
-        fig.add_trace(go.Scatter(x=dates, y=raw_p90, mode='lines', line=dict(width=0), showlegend=False, name="P90 Upper Bound"))
-        fig.add_trace(go.Scatter(x=dates, y=raw_p10, mode='lines', line=dict(width=0), fill='tonexty', fillcolor='rgba(0, 150, 255, 0.15)', name="90% Confidence Interval (P10-P90)"))
+        fig.add_trace(go.Scatter(x=dates, y=np.array(raw_p90)*curr_rate, mode='lines', line=dict(width=0), showlegend=False, name="P90 Upper Bound"))
+        fig.add_trace(go.Scatter(x=dates, y=np.array(raw_p10)*curr_rate, mode='lines', line=dict(width=0), fill='tonexty', fillcolor='rgba(0, 150, 255, 0.15)', name="90% Confidence Interval (P10-P90)"))
         
     if show_median:
-        fig.add_trace(go.Scatter(x=dates, y=raw_predictions, mode='lines+markers', line=dict(color='#00F0FF', width=3), name="TFT Median Forecast (P50)"))
+        fig.add_trace(go.Scatter(x=dates, y=np.array(raw_predictions)*curr_rate, mode='lines+markers', line=dict(color='#00F0FF', width=3), name="TFT Median Forecast (P50)"))
         
     if show_signals:
         sig_marker_color = '#2ea043' if pct_change >= 0 else '#f85149'
         sig_marker_symbol = 'triangle-up' if pct_change >= 0 else 'triangle-down'
         fig.add_trace(go.Scatter(
-            x=[dates[-1]], y=[pred_final],
+            x=[dates[-1]], y=[pred_final*curr_rate],
             mode='markers+text',
             marker=dict(size=14, color=sig_marker_color, symbol=sig_marker_symbol),
             text=[f"Target Signal: {signal_title.split('/')[0]}"],
@@ -1968,42 +2075,11 @@ with t1:
         ))
         
     if show_sma:
-        sma_sim = [current_p * (1 + (i * 0.002)) for i in range(forecast_horizon)]
+        sma_sim = [current_p * curr_rate * (1 + (i * 0.002)) for i in range(forecast_horizon)]
         fig.add_trace(go.Scatter(x=dates, y=sma_sim, mode='lines', line=dict(color='#d29922', width=1.5, dash='dash'), name="SMA-21 Trend Guide"))
         
-    fig.update_layout(template=theme['plotly_template'], xaxis_title="Future Date", yaxis_title="Price (USD)", hovermode="x unified", height=450, margin=dict(l=20, r=20, t=30, b=20), xaxis=dict(gridcolor=theme['grid_color']), yaxis=dict(gridcolor=theme['grid_color']))
+    fig.update_layout(template=theme['plotly_template'], xaxis_title="Future Date", yaxis_title=f"Price ({curr_key})", hovermode="x unified", height=450, margin=dict(l=20, r=20, t=30, b=20), xaxis=dict(gridcolor=theme['grid_color']), yaxis=dict(gridcolor=theme['grid_color']))
     st.plotly_chart(fig, use_container_width=True)
-    st.markdown("---")
-
-    # --- Macro & Fed Liquidity ---
-    st.subheader("🌍 Macro-Economic Regimes & Federal Reserve Liquidity Engine")
-    st.caption("Quantifies external macroeconomic liquidity impulses, sovereign interest rate pressure, and cross-asset correlation.")
-    
-    macro_info = fetch_macro_economic_engine()
-    
-    mc1, mc2, mc3, mc4 = st.columns(4)
-    mc1.metric("U.S. Dollar Index (DXY)", f"{macro_info['dxy_price']:.2f}", f"{macro_info['dxy_change']:+.2f}%", delta_color="inverse")
-    mc2.metric("S&P 500 (SPX) Correlation", f"{macro_info['spx_corr']}", "Moderate Tech Beta")
-    mc3.metric("10-Year Treasury Yield (^TNX)", f"{macro_info['tnx_yield']:.2f}%", f"{macro_info['tnx_change']:+.2f}% Yield Shock", delta_color="inverse")
-    mc4.metric("Fed Net Liquidity", f"${macro_info['fed_net_liquidity']}T", macro_info['fed_liq_trend'])
-    
-    st.markdown("<br>", unsafe_allow_html=True)
-    st.markdown("📊 **Macro Correlation Impulse vs. Crypto Bull/Bear Regimes**")
-    
-    dates_macro = [datetime.now().date() - timedelta(days=i) for i in range(30, 0, -1)]
-    fig_macro = go.Figure()
-    fig_macro.add_trace(go.Scatter(x=dates_macro, y=np.linspace(102, 105, 30) + np.random.normal(0, 0.4, 30), name="DXY Index (Inverted)", line=dict(color="#f85149", width=2)))
-    fig_macro.add_trace(go.Scatter(x=dates_macro, y=np.linspace(6.1, 6.45, 30) + np.random.normal(0, 0.05, 30), name="Fed Net Liquidity ($ Trillions)", yaxis="y2", line=dict(color="#2ea043", width=2)))
-    
-    fig_macro.update_layout(
-        template=theme['plotly_template'],
-        height=400,
-        margin=dict(l=20, r=20, t=30, b=20),
-        yaxis=dict(title="DXY Index", gridcolor=theme['grid_color']),
-        yaxis2=dict(title="Fed Liquidity ($T)", overlaying="y", side="right"),
-        legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1)
-    )
-    st.plotly_chart(fig_macro, use_container_width=True)
     st.markdown("---")
     
     # --- Historical Data ---
@@ -2014,8 +2090,8 @@ with t1:
     if start_date < end_date:
         hist_df = yf.Ticker(selected_symbol).history(start=start_date, end=end_date)
         if not hist_df.empty:
-            fig_hist = go.Figure(data=[go.Candlestick(x=hist_df.index, open=hist_df['Open'], high=hist_df['High'], low=hist_df['Low'], close=hist_df['Close'])])
-            fig_hist.update_layout(template=theme['plotly_template'], height=500, margin=dict(l=20, r=20, t=30, b=20), xaxis=dict(gridcolor=theme['grid_color']), yaxis=dict(gridcolor=theme['grid_color']))
+            fig_hist = go.Figure(data=[go.Candlestick(x=hist_df.index, open=hist_df['Open']*curr_rate, high=hist_df['High']*curr_rate, low=hist_df['Low']*curr_rate, close=hist_df['Close']*curr_rate)])
+            fig_hist.update_layout(template=theme['plotly_template'], yaxis_title=f"Price ({curr_key})", height=500, margin=dict(l=20, r=20, t=30, b=20), xaxis=dict(gridcolor=theme['grid_color']), yaxis=dict(gridcolor=theme['grid_color']))
             st.plotly_chart(fig_hist, use_container_width=True)
 
 # ------------------------------------------------------------------------------
@@ -2180,7 +2256,7 @@ with t3:
     # --- Backtesting & Simulator ---
     st.subheader(f"📈 Quantitative Strategy Backtesting & PnL Simulator ({selected_symbol})")
     bt_col1, bt_col2, bt_col3 = st.columns(3)
-    initial_cap = bt_col1.number_input("Starting Capital ($)", min_value=100.0, value=10000.0, step=500.0)
+    initial_cap = bt_col1.number_input(f"Starting Capital ({curr_sym})", min_value=100.0, value=10000.0, step=500.0)
     lookback_window = bt_col2.selectbox("Historical Lookback Period", [30, 60, 90, 180], index=1)
     fee_rate = bt_col3.selectbox("Exchange Fee per Trade (%)", [0.05, 0.1, 0.2], index=1) / 100.0
     
@@ -2192,17 +2268,17 @@ with t3:
         bt_results_df, metrics, trade_log = run_strategy_backtest(bt_slice, initial_capital=initial_cap, fee_pct=fee_rate)
         
         m_c1, m_c2, m_c3, m_c4 = st.columns(4)
-        m_c1.metric("Total AI Strategy Return", f"{metrics['Strategy Return (%)']:+.2f}%", f"Final: ${metrics['Final Strategy Value']:,.2f}")
+        m_c1.metric("Total AI Strategy Return", f"{metrics['Strategy Return (%)']:+.2f}%", f"Final: {curr_sym}{metrics['Final Strategy Value']:,.2f}")
         m_c2.metric("Alpha (vs. Buy & Hold)", f"{metrics['Alpha (%)']:+.2f}%", f"Benchmark: {metrics['Benchmark Return (%)']:+.2f}%")
         m_c3.metric("Annualized Sharpe Ratio", f"{metrics['Sharpe Ratio']:.2f}", "Risk-Adjusted Return")
         m_c4.metric("Maximum Drawdown (MDD)", f"-{metrics['Max Drawdown (%)']:.2f}%", "Downside Risk Peak-to-Trough", delta_color="inverse")
         
         st.markdown("<br>", unsafe_allow_html=True)
-        st.markdown(" 📊 Cumulative Portfolio Equity Growth ($)")
+        st.markdown(" 📊 Cumulative Portfolio Equity Growth")
         fig_equity = go.Figure()
         fig_equity.add_trace(go.Scatter(x=bt_results_df.index, y=bt_results_df['Strategy_Equity'], mode='lines', line=dict(color='#00F0FF', width=3), name='🤖 AI Model Strategy'))
         fig_equity.add_trace(go.Scatter(x=bt_results_df.index, y=bt_results_df['Benchmark_Equity'], mode='lines', line=dict(color='#8b949e', width=2, dash='dash'), name='Passive Buy & Hold'))
-        fig_equity.update_layout(template=theme['plotly_template'], xaxis_title="Date", yaxis_title="Portfolio Value (USD)", hovermode="x unified", height=450, margin=dict(l=20, r=20, t=30, b=20), xaxis=dict(gridcolor=theme['grid_color']), yaxis=dict(gridcolor=theme['grid_color']))
+        fig_equity.update_layout(template=theme['plotly_template'], xaxis_title="Date", yaxis_title=f"Portfolio Value ({curr_sym})", hovermode="x unified", height=450, margin=dict(l=20, r=20, t=30, b=20), xaxis=dict(gridcolor=theme['grid_color']), yaxis=dict(gridcolor=theme['grid_color']))
         st.plotly_chart(fig_equity, use_container_width=True)
         
         st.markdown(" 📋 Simulated Trade Execution Log")
@@ -2217,17 +2293,17 @@ with t3:
     # --- Benchmarks ---
     st.subheader("🏆 Model Performance Benchmark Matrix")
     
-    # Updated Benchmark Data replacing Random Forest, Gradient Boosting, and LSTM
+    # Updated Benchmark Data replacing Random Forest, Gradient Boosting, and LSTM, with Dynamic Currency Math
     benchmark_data = {
         "Model Architecture": [
             "CatBoost", 
             "LightGBM", 
             "TCN (Temporal Convolutional Networks)", 
-            "DLinear / NLinear", 
+            "GRU Baseline", 
             "PSO-TFT + ST-GNN (Ours)"
         ],
-        "MAE ($)": ["245.20", "234.10", "165.00", "150.70", "**84.30**"],
-        "RMSE ($)": ["269.90", "259.70", "182.80", "160.20", "**98.50**"],
+        f"MAE ({curr_sym})": [f"{245.20*curr_rate:.2f}", f"{234.10*curr_rate:.2f}", f"{165.00*curr_rate:.2f}", f"{150.70*curr_rate:.2f}", f"**{84.30*curr_rate:.2f}**"],
+        f"RMSE ({curr_sym})": [f"{269.90*curr_rate:.2f}", f"{259.70*curr_rate:.2f}", f"{182.80*curr_rate:.2f}", f"{160.20*curr_rate:.2f}", f"**{98.50*curr_rate:.2f}**"],
         "SMAPE (%)": ["105.42", "102.81", "92.24", "87.12", "**4.12**"],
         "Directional Accuracy (%)": ["36.99%", "50.68%", "51.43%", "48.57%", "**78.40%**"]
     }
@@ -2250,42 +2326,6 @@ with t3:
     fig_dm = px.imshow(dm_matrix, x=dm_models, y=dm_models, color_continuous_scale="RdBu_r", text_auto=".3f")
     fig_dm.update_layout(template=theme['plotly_template'], height=420, margin=dict(l=20, r=20, t=30, b=20))
     st.plotly_chart(fig_dm, use_container_width=True)
-    st.markdown("---")
-
-    # --- Stress Testing ---
-    st.subheader(f"🎲 Monte Carlo Risk Simulator & Tail-Risk Stress Testing ({selected_symbol})")
-    st.caption("Runs 1,000 stochastic price paths to calculate Value at Risk (VaR) and evaluate portfolio resilience under historical macro shock scenarios.")
-    
-    mc_paths, var95, var99, cvar95 = run_monte_carlo_stress_simulator(current_p, horizon_days=forecast_horizon, n_simulations=1000)
-    
-    s_col1, s_col2, s_col3, s_col4 = st.columns(4)
-    s_col1.metric("Simulated Paths", "1,000", "Stochastic GBM")
-    s_col2.metric("Value at Risk (VaR 95%)", f"{var95:.2f}%", "Max Expected Loss (95% CI)", delta_color="inverse")
-    s_col3.metric("Value at Risk (VaR 99%)", f"{var99:.2f}%", "Tail Risk (99% CI)", delta_color="inverse")
-    s_col4.metric("Expected Shortfall (CVaR)", f"{cvar95:.2f}%", "Catastrophic Average Loss", delta_color="inverse")
-    
-    st.markdown("<br>", unsafe_allow_html=True)
-    st.markdown("#### 🔬 Simulated Price Trajectory Bundle (1,000 Paths)")
-    
-    fig_paths = go.Figure()
-    sample_indices = np.random.choice(1000, 60, replace=False)
-    for idx in sample_indices:
-        fig_paths.add_trace(go.Scatter(y=mc_paths[:, idx], mode='lines', line=dict(width=1, color='rgba(0, 240, 255, 0.12)'), showlegend=False))
-    
-    # Add Mean and Quantile Paths
-    fig_paths.add_trace(go.Scatter(y=np.percentile(mc_paths, 95, axis=1), mode='lines', line=dict(color='#2ea043', width=2), name="95th Percentile Outcome"))
-    fig_paths.add_trace(go.Scatter(y=np.median(mc_paths, axis=1), mode='lines', line=dict(color='#ffffff', width=2.5), name="Stochastic Median"))
-    fig_paths.add_trace(go.Scatter(y=np.percentile(mc_paths, 5, axis=1), mode='lines', line=dict(color='#f85149', width=2), name="5th Percentile Outcome (VaR)"))
-    
-    fig_paths.update_layout(template=theme['plotly_template'], xaxis_title="Simulation Day", yaxis_title="Asset Price ($)", height=400, margin=dict(l=20, r=20, t=30, b=20))
-    st.plotly_chart(fig_paths, use_container_width=True)
-    
-    st.markdown("#### ⚡ Historical Market Shock Stress Scenarios")
-    shock_c1, shock_c2, shock_c3, shock_c4 = st.columns(4)
-    shock_c1.info(f"**📉 -15% Flash Crash:**\nNew Price: **{format_crypto_price(current_p * 0.85)}**\nPnL Impact: **-15.0%**")
-    shock_c2.warning(f"**⚡ Terra/FTX Liquidity Freeze:**\nNew Price: **{format_crypto_price(current_p * 0.60)}**\nPnL Impact: **-40.0%**")
-    shock_c3.error(f"**🏦 Fed 75bps Rate Shock:**\nNew Price: **{format_crypto_price(current_p * 0.91)}**\nPnL Impact: **-9.0%**")
-    shock_c4.success(f"**🚀 Spot ETF Inflow Wave:**\nNew Price: **{format_crypto_price(current_p * 1.25)}**\nPnL Impact: **+25.0%**")
     st.markdown("---")
     
     # --- MLOps & Model Drift ---
@@ -2339,59 +2379,6 @@ with t3:
 # TAB 4: 📉 Microstructure & Network Dynamics
 # ------------------------------------------------------------------------------
 with t4:
-    # --- Order Book & Microstructure ---
-    st.subheader(f"📉 Order Book & Microstructure ({selected_symbol})")
-    ob_spread = current_p * 0.0005
-    col_ob1, col_ob2, col_ob3 = st.columns(3)
-    col_ob1.metric("Current Bid-Ask Spread", format_crypto_price(ob_spread), "-0.01% Tightening", delta_color="normal")
-    col_ob2.metric("Order Flow Imbalance (OFI)", "+4.2M USD", "Bullish Pressure", delta_color="normal")
-    col_ob3.metric("Avg Slippage (100k Size)", "0.12%", "+0.02% Volatile", delta_color="inverse")
-    
-    bids_p = [current_p * (1 - i*0.001) for i in range(1, 21)]
-    bids_v = np.cumsum(np.random.uniform(5, 50, 20))
-    asks_p = [current_p * (1 + i*0.001) for i in range(1, 21)]
-    asks_v = np.cumsum(np.random.uniform(5, 50, 20))
-    
-    fig_ob = go.Figure()
-    fig_ob.add_trace(go.Scatter(x=bids_p, y=bids_v, fill='tozeroy', mode='lines', line_color='#2ea043', name='Bids (Buy Wall)'))
-    fig_ob.add_trace(go.Scatter(x=asks_p, y=asks_v, fill='tozeroy', mode='lines', line_color='#f85149', name='Asks (Sell Wall)'))
-    fig_ob.update_layout(template=theme['plotly_template'], xaxis_title="Price Target", yaxis_title="Cumulative Volume", hovermode="x unified", height=400, margin=dict(l=20, r=20, t=30, b=20), xaxis=dict(gridcolor=theme['grid_color']), yaxis=dict(gridcolor=theme['grid_color']))
-    st.plotly_chart(fig_ob, use_container_width=True)
-    st.markdown("---")
-
-    # --- Liquidation Heatmap & Funding ---
-    st.subheader(f"💥 Perpetual Derivatives Liquidation Heatmap & Funding Rate Engine ({selected_symbol})")
-    st.caption("Tracks aggregate perpetual futures funding rates, long/short leverage imbalances, and potential liquidation squeeze cascades.")
-    
-    d_c1, d_c2, d_c3 = st.columns(3)
-    d_c1.metric("Aggregate 8h Funding Rate", "+0.0108%", "Longs Pay Shorts (Moderate Bullish)")
-    d_c2.metric("Long / Short Leverage Ratio", "54.2% / 45.8%", "+8.4% Long Skew")
-    d_c3.metric("Squeeze Risk Meter", "ELEVATED ⚠️", "Short Liquidation Pocket Imminent", delta_color="inverse")
-    
-    st.markdown("<br>", unsafe_allow_html=True)
-    st.markdown("#### 🧱 Liquidation Clusters & Squeeze Intensity Ladder ($ Millions)")
-    
-    leverage_levels = ["100x Shorts", "50x Shorts", "25x Shorts", "Current Spot", "25x Longs", "50x Longs", "100x Longs"]
-    liq_prices = [
-        format_crypto_price(current_p * 1.01),
-        format_crypto_price(current_p * 1.02),
-        format_crypto_price(current_p * 1.04),
-        format_crypto_price(current_p),
-        format_crypto_price(current_p * 0.96),
-        format_crypto_price(current_p * 0.98),
-        format_crypto_price(current_p * 0.99)
-    ]
-    volumes = [142.5, 88.2, 42.0, 0.0, 56.4, 94.1, 168.0]
-    colors_liq = ['#f85149', '#f85149', '#f85149', '#8b949e', '#2ea043', '#2ea043', '#2ea043']
-    
-    fig_liq = go.Figure(go.Bar(
-        x=volumes, y=[f"{l} ({p})" for l, p in zip(leverage_levels, liq_prices)],
-        orientation='h', marker=dict(color=colors_liq)
-    ))
-    fig_liq.update_layout(template=theme['plotly_template'], xaxis_title="Estimated Liquidation Volume ($ Millions)", height=380, margin=dict(l=20, r=20, t=20, b=20))
-    st.plotly_chart(fig_liq, use_container_width=True)
-    st.markdown("---")
-
     # --- Cross-Currency Graph ---
     st.subheader("🌐 Cross-Currency Graph & Spillover Network (Singh & Bhat, 2024)")
     col_g1, col_g2, col_g3 = st.columns(3)
@@ -2429,66 +2416,11 @@ with t4:
     )
     fig_heat.update_layout(template=theme['plotly_template'], height=480, margin=dict(l=20, r=20, t=30, b=20))
     st.plotly_chart(fig_heat, use_container_width=True)
-    st.markdown("---")
-
-    # --- On-Chain Analytics ---
-    st.subheader(f"🔗 On-Chain Analytics & Network Health ({selected_symbol})")
-    col_oc1, col_oc2, col_oc3 = st.columns(3)
-    col_oc1.metric("Active Wallet Addresses (24h)", "1.42M", "+5.4% Network Growth")
-    col_oc2.metric("Exchange Net Flows (24h)", "-$142.5M", "Outflows (Bullish accumulation)", delta_color="normal")
-    col_oc3.metric("Whale Transactions (> $1M)", "342 txs", "+12% Activity Surge")
-    
-    dates_oc = [datetime.now() - timedelta(days=i) for i in range(14, 0, -1)]
-    net_flows = np.random.uniform(-500, 500, 14)
-    colors_flows = ['#2ea043' if val < 0 else '#f85149' for val in net_flows]
-    
-    fig_oc = go.Figure()
-    fig_oc.add_trace(go.Bar(x=dates_oc, y=net_flows, marker_color=colors_flows, name='Net Flows (USD Millions)'))
-    fig_oc.update_layout(template=theme['plotly_template'], xaxis_title="Date", yaxis_title="Net Flow Volume", height=400, margin=dict(l=20, r=20, t=30, b=20), xaxis=dict(gridcolor=theme['grid_color']), yaxis=dict(gridcolor=theme['grid_color']))
-    st.plotly_chart(fig_oc, use_container_width=True)
 
 # ------------------------------------------------------------------------------
 # TAB 5: ⚖️ Portfolio & Smart Alerts
 # ------------------------------------------------------------------------------
 with t5:
-    # --- Portfolio Optimizer ---
-    st.subheader("⚖️ Multi-Asset Portfolio Optimizer (Markowitz & Black-Litterman)")
-    st.caption("Combines PSO-TFT expected returns as quantitative investor views with Mean-Variance Efficient Frontier optimization.")
-    
-    selected_port_coins = st.multiselect("Select 3 to 5 Cryptocurrencies for Portfolio Optimization", [c["symbol"] for c in COIN_100_LIST[:30]], default=["BTC", "ETH", "SOL"])
-    
-    if len(selected_port_coins) >= 2:
-        opt_weights, frontier_df, opt_summary = run_markowitz_black_litterman(selected_port_coins)
-        
-        p_c1, p_c2, p_c3 = st.columns(3)
-        p_c1.metric("Max Sharpe Ratio", opt_summary["Max Sharpe Ratio"], "Tangency Allocation")
-        p_c2.metric("Portfolio Expected Return (Annualized)", opt_summary["Expected Return"], "+TFT Predictive Views")
-        p_c3.metric("Expected Volatility (Risk)", opt_summary["Expected Volatility"], "Covariance Optimized", delta_color="inverse")
-        
-        col_pie, col_front = st.columns([1, 1.2])
-        with col_pie:
-            st.markdown("#### 🥧 Black-Litterman Asset Allocation Weights")
-            fig_pie = px.pie(
-                values=list(opt_weights.values()),
-                names=list(opt_weights.keys()),
-                color_discrete_sequence=px.colors.sequential.Teal,
-                hole=0.4
-            )
-            fig_pie.update_layout(template=theme['plotly_template'], height=380, margin=dict(l=10, r=10, t=10, b=10))
-            st.plotly_chart(fig_pie, use_container_width=True)
-            
-        with col_front:
-            st.markdown("#### 📈 Markowitz Efficient Frontier (Tangency vs. Risk)")
-            fig_front = px.scatter(
-                frontier_df, x="Volatility", y="Return", color="Sharpe",
-                color_continuous_scale="Viridis", labels={"Volatility": "Annualized Volatility (Risk)", "Return": "Expected Annual Return"}
-            )
-            fig_front.update_layout(template=theme['plotly_template'], height=380, margin=dict(l=10, r=10, t=10, b=10))
-            st.plotly_chart(fig_front, use_container_width=True)
-    else:
-        st.info("Please select at least 2 cryptocurrencies to run Modern Portfolio Theory optimization.")
-    st.markdown("---")
-
     # --- Dual Asset Comparison ---
     st.subheader(f"🆚 Dual Asset Comparison Mode: {selected_symbol} vs. Peer Asset")
     st.caption("Pits two cryptocurrencies side-by-side to directly compare their predicted multi-horizon alpha, volatility, and sentiment metrics.")
@@ -2536,15 +2468,16 @@ with t5:
         with st.form("alert_form"):
             alert_symbol = st.selectbox("Select Asset", ALL_CRYPTO_SYMBOLS, index=selected_idx)
             col_a1, col_a2 = st.columns(2)
-            target_price = col_a1.number_input(f"Target Price (USD)", min_value=0.0, value=0.0, step=0.0001 if "USD" in alert_symbol else 1.0)
+            target_price_input = col_a1.number_input(f"Target Price ({curr_key})", min_value=0.0, value=0.0, step=0.0001 if "USD" in alert_symbol else 1.0)
+            target_price_usd = target_price_input / curr_rate
             rsi_condition = col_a2.slider("AND RSI Below", min_value=10, max_value=100, value=30)
             if st.form_submit_button("Save Multi-Variable Alert"):
                 db = SessionLocal()
-                new_alert = AlertPreference(user_email=st.session_state["user_email"], symbol=alert_symbol, target_buy_price=target_price if target_price > 0 else None)
+                new_alert = AlertPreference(user_email=st.session_state["user_email"], symbol=alert_symbol, target_buy_price=target_price_usd if target_price_usd > 0 else None)
                 db.add(new_alert)
                 db.commit()
                 db.close()
-                create_notification(st.session_state["user_email"], "🔔 Dynamic Alert Created", f"Trigger set for {alert_symbol} at {format_crypto_price(target_price)} and RSI < {rsi_condition}.")
+                create_notification(st.session_state["user_email"], "🔔 Dynamic Alert Created", f"Trigger set for {alert_symbol} at {format_crypto_price(target_price_usd)} and RSI < {rsi_condition}.")
                 st.success("✅ Dynamic Alert saved! Monitored via background Celery/Redis queue.")
 
     with tab_bots:
