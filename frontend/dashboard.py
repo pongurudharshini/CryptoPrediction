@@ -9,7 +9,6 @@ Features:
 - Comprehensive "Crypto Investment Guide" for Beginners & Institutional Traders
 - Telegram & Discord Automated Webhook Alert Bots with Dynamic Contextual Setup Guides
 - Side-by-Side Dual Asset Comparison Mode (Trajectory, VSN Explainability, Sentiment)
-- Cross-Currency Graph Transformers & Market Spillover Matrix (Singh & Bhat, 2024)
 - AI Copilot 2-Sentence Natural Language Summary Banner on Main Dashboard
 - High-Performance Charting with Interactive Overlay Toggles (Forecast, Bounds, Signals, SMAs)
 - In-App Notification Bell Center (Local SQLite Event Bus)
@@ -19,13 +18,11 @@ Features:
 - Latest News Feed with Real-Time Relative Timestamps
 - Downloadable PDF (ReportLab) & Raw CSV Forecast Timeline Exports (With Clean Black/White PDF Tables)
 - Vectorized Backtesting Simulator with Trade Execution Logs (Sharpe, MDD, Alpha, Win Rate)
-- MLOps Pipeline: Continuous Data Drift Telemetry (PSI) & Retraining Trigger
 - Historical Candlestick Explorer, VSN Explainability, Sentiment Gauges, & Benchmarks
 - NLP Sentiment Engine: Scrapes Crypto News, X/Reddit to weight model confidence.
 - Multimodal LLM Fusion: FinBERT + Cross-Attention for deep semantic context.
 - Automated Feature Pipeline: RSI, MACD, Bollinger Bands, MA crossovers, and BTC dominance.
 - Dynamic Threshold Engine: Multi-variable async alerts (Celery/Redis architecture).
-- Diebold-Mariano Statistical Significance Test: Heatmap validating forecasting superiority.
 """
 
 import sys
@@ -80,19 +77,60 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# --- GLOBAL CURRENCIES DICTIONARY ---
-CURRENCIES = {
-    "USD": {"symbol": "$", "rate": 1.0, "name": "United States Dollar"},
-    "INR": {"symbol": "₹", "rate": 83.5, "name": "Indian Rupee"},
-    "EUR": {"symbol": "€", "rate": 0.92, "name": "Euro (used across the European Union)"},
-    "JPY": {"symbol": "¥", "rate": 150.0, "name": "Japanese Yen"},
-    "GBP": {"symbol": "£", "rate": 0.79, "name": "British Pound Sterling"},
-    "AUD": {"symbol": "A$", "rate": 1.52, "name": "Australian Dollar"},
-    "CAD": {"symbol": "C$", "rate": 1.37, "name": "Canadian Dollar"},
-    "KRW": {"symbol": "₩", "rate": 1350.0, "name": "South Korean Won"},
-    "TRY": {"symbol": "₺", "rate": 32.0, "name": "Turkish Lira"},
-    "BRL": {"symbol": "R$", "rate": 5.1, "name": "Brazilian Real"}
+# --- GLOBAL CURRENCIES METADATA ---
+BASE_CURRENCIES = {
+    "USD": {"symbol": "$", "fallback_rate": 1.0, "name": "United States Dollar"},
+    "INR": {"symbol": "₹", "fallback_rate": 83.5, "name": "Indian Rupee"},
+    "EUR": {"symbol": "€", "fallback_rate": 0.92, "name": "Euro (used across the European Union)"},
+    "JPY": {"symbol": "¥", "fallback_rate": 150.0, "name": "Japanese Yen"},
+    "GBP": {"symbol": "£", "fallback_rate": 0.79, "name": "British Pound Sterling"},
+    "AUD": {"symbol": "A$", "fallback_rate": 1.52, "name": "Australian Dollar"},
+    "CAD": {"symbol": "C$", "fallback_rate": 1.37, "name": "Canadian Dollar"},
+    "KRW": {"symbol": "₩", "fallback_rate": 1350.0, "name": "South Korean Won"},
+    "TRY": {"symbol": "₺", "fallback_rate": 32.0, "name": "Turkish Lira"},
+    "BRL": {"symbol": "R$", "fallback_rate": 5.1, "name": "Brazilian Real"},
+    "CHF": {"symbol": "Fr.", "fallback_rate": 0.90, "name": "Swiss Franc"},
+    "CNY": {"symbol": "¥", "fallback_rate": 7.23, "name": "Chinese Yuan"},
+    "SGD": {"symbol": "S$", "fallback_rate": 1.35, "name": "Singapore Dollar"},
+    "AED": {"symbol": "د.إ", "fallback_rate": 3.67, "name": "UAE Dirham"},
+    "SAR": {"symbol": "﷼", "fallback_rate": 3.75, "name": "Saudi Riyal"},
+    "NZD": {"symbol": "NZ$", "fallback_rate": 1.65, "name": "New Zealand Dollar"},
+    "HKD": {"symbol": "HK$", "fallback_rate": 7.82, "name": "Hong Kong Dollar"},
+    "MXN": {"symbol": "Mex$", "fallback_rate": 17.00, "name": "Mexican Peso"},
+    "ZAR": {"symbol": "R", "fallback_rate": 19.00, "name": "South African Rand"},
+    "THB": {"symbol": "฿", "fallback_rate": 36.50, "name": "Thai Baht"}
 }
+
+@st.cache_data(ttl=60)
+def fetch_live_exchange_rates():
+    """Fetches real-time exchange rates, caching for 60 seconds with a safe fallback."""
+    final_currencies = {}
+    try:
+        response = requests.get("https://open.er-api.com/v6/latest/USD", timeout=5)
+        if response.status_code == 200:
+            data = response.json()
+            rates = data.get("rates", {})
+            for code, meta in BASE_CURRENCIES.items():
+                final_currencies[code] = {
+                    "symbol": meta["symbol"],
+                    "name": meta["name"],
+                    "rate": rates.get(code, meta["fallback_rate"])
+                }
+            return final_currencies
+    except Exception:
+        pass
+    
+    # Safe Fallback if API is offline
+    for code, meta in BASE_CURRENCIES.items():
+        final_currencies[code] = {
+            "symbol": meta["symbol"],
+            "name": meta["name"],
+            "rate": meta["fallback_rate"]
+        }
+    return final_currencies
+
+# Dynamically populate CURRENCIES dict
+CURRENCIES = fetch_live_exchange_rates()
 
 # --- 100 INSTITUTIONAL CRYPTOCURRENCIES LIST (Ranked 1-100) ---
 COIN_100_LIST = [
@@ -230,6 +268,8 @@ if "admin_authenticated" not in st.session_state:
     st.session_state["admin_authenticated"] = False
 if "selected_currency" not in st.session_state:
     st.session_state["selected_currency"] = "USD"
+if "show_sentiment_panel" not in st.session_state:
+    st.session_state["show_sentiment_panel"] = False
 
 curr_key = st.session_state["selected_currency"]
 curr_rate = CURRENCIES.get(curr_key, {"rate": 1.0})["rate"]
@@ -241,7 +281,7 @@ def toggle_theme():
 # Theme Dictionary
 if st.session_state.theme_mode == "dark":
     theme = {
-        "bg_main": "#0e1117",
+        "bg_main": "#0D0F12",
         "bg_sec": "#161b22",
         "border": "#30363d",
         "text_main": "#ffffff",
@@ -605,224 +645,6 @@ def get_real_market_data(symbol: str, horizon: int):
         "insights": insights
     }
 
-# ==============================================================================
-# --- ADVANCED QUANT ENGINES (MACRO, PORTFOLIO, STRESS, LIQUIDATION) ---
-# ==============================================================================
-
-@st.cache_data(ttl=60)
-def fetch_macro_economic_engine():
-    """Fetches and synthesizes real macro metrics: DXY, S&P 500 correlation, 10Y Yields, and Fed Liquidity."""
-    macro_data = {}
-    try:
-        dxy = yf.Ticker("DX-Y.NYB").history(period="30d")
-        macro_data["dxy_price"] = float(dxy['Close'].iloc[-1]) if not dxy.empty else 103.85
-        macro_data["dxy_change"] = float(dxy['Close'].pct_change().iloc[-1] * 100) if not dxy.empty else -0.22
-    except Exception:
-        macro_data["dxy_price"] = 103.85
-        macro_data["dxy_change"] = -0.22
-
-    try:
-        tnx = yf.Ticker("^TNX").history(period="30d")
-        macro_data["tnx_yield"] = float(tnx['Close'].iloc[-1]) if not tnx.empty else 4.28
-        macro_data["tnx_change"] = float(tnx['Close'].diff().iloc[-1]) if not tnx.empty else 0.03
-    except Exception:
-        macro_data["tnx_yield"] = 4.28
-        macro_data["tnx_change"] = 0.03
-
-    try:
-        spx = yf.Ticker("^GSPC").history(period="60d")
-        btc = yf.Ticker("BTC-USD").history(period="60d")
-        if not spx.empty and not btc.empty:
-            merged = pd.concat([spx['Close'].pct_change(), btc['Close'].pct_change()], axis=1).dropna()
-            corr = float(merged.iloc[:, 0].corr(merged.iloc[:, 1]))
-            macro_data["spx_corr"] = round(corr, 2)
-        else:
-            macro_data["spx_corr"] = 0.46
-    except Exception:
-        macro_data["spx_corr"] = 0.46
-
-    # Federal Reserve Net Liquidity: Fed Balance Sheet - TGA - Reverse Repo
-    macro_data["fed_net_liquidity"] = 6.42 # Trillion USD
-    macro_data["fed_liq_trend"] = "+$82B Expanding (Bullish Tailwind)"
-    return macro_data
-
-def run_markowitz_black_litterman(selected_coins: list):
-    """
-    Computes optimal portfolio allocation via Mean-Variance Optimization and Black-Litterman model
-    integrating TFT forecast returns as investor views.
-    """
-    n = len(selected_coins)
-    if n < 2:
-        return None, None, None
-
-    returns_list = []
-    expected_views = []
-    
-    for s in selected_coins:
-        sym = f"{s}-USD" if not s.endswith("-USD") else s
-        m_data = get_real_market_data(sym, 20)
-        curr = m_data["current_price"]
-        pred = m_data["predictions"][-1]
-        exp_ret = (pred - curr) / curr
-        expected_views.append(exp_ret)
-        
-        try:
-            h = yf.Ticker(sym).history(period="90d")['Close'].pct_change().dropna()
-            if len(h) < 30:
-                h = pd.Series(np.random.normal(exp_ret / 20, 0.04, 60))
-        except Exception:
-            h = pd.Series(np.random.normal(exp_ret / 20, 0.04, 60))
-        returns_list.append(h)
-
-    ret_df = pd.concat(returns_list, axis=1).dropna()
-    cov_matrix = ret_df.cov() * 365
-    
-    # Black-Litterman View Blending
-    prior_returns = ret_df.mean() * 365
-    tau = 0.05
-    bl_returns = 0.5 * prior_returns.values + 0.5 * np.array(expected_views) * 12 # Annualized views
-
-    # Monte Carlo Efficient Frontier Generation
-    num_portfolios = 800
-    all_weights = np.zeros((num_portfolios, n))
-    ret_arr = np.zeros(num_portfolios)
-    vol_arr = np.zeros(num_portfolios)
-    sharpe_arr = np.zeros(num_portfolios)
-    
-    for i in range(num_portfolios):
-        weights = np.random.random(n)
-        weights /= np.sum(weights)
-        all_weights[i, :] = weights
-        
-        p_ret = np.sum(bl_returns * weights)
-        p_vol = np.sqrt(np.dot(weights.T, np.dot(cov_matrix.values, weights)))
-        
-        ret_arr[i] = p_ret
-        vol_arr[i] = p_vol
-        sharpe_arr[i] = (p_ret - 0.04) / (p_vol + 1e-9) # 4% Risk free rate
-
-    max_idx = sharpe_arr.argmax()
-    best_weights = all_weights[max_idx, :]
-    
-    optimal_allocation = {selected_coins[i].replace("-USD", ""): round(best_weights[i] * 100, 1) for i in range(n)}
-    frontier_data = pd.DataFrame({
-        "Volatility": vol_arr,
-        "Return": ret_arr,
-        "Sharpe": sharpe_arr
-    })
-    
-    opt_summary = {
-        "Expected Return": f"{ret_arr[max_idx] * 100:.2f}%",
-        "Expected Volatility": f"{vol_arr[max_idx] * 100:.2f}%",
-        "Max Sharpe Ratio": f"{sharpe_arr[max_idx]:.2f}"
-    }
-    return optimal_allocation, frontier_data, opt_summary
-
-def run_monte_carlo_stress_simulator(current_price: float, horizon_days: int = 30, n_simulations: int = 1000):
-    """Generates 1,000 Monte Carlo stochastic geometric Brownian motion paths & calculates VaR/CVaR."""
-    np.random.seed(42)
-    dt = 1.0 / 365.0
-    mu = 0.12 # Drift
-    sigma = 0.65 # Annualized Crypto Volatility
-    
-    paths = np.zeros((horizon_days + 1, n_simulations))
-    paths[0] = current_price
-    
-    for t in range(1, horizon_days + 1):
-        z = np.random.standard_normal(n_simulations)
-        paths[t] = paths[t - 1] * np.exp((mu - 0.5 * sigma ** 2) * dt + sigma * np.sqrt(dt) * z)
-        
-    final_prices = paths[-1]
-    returns = (final_prices - current_price) / current_price
-    
-    var_95 = np.percentile(returns, 5) * 100
-    var_99 = np.percentile(returns, 1) * 100
-    cvar_95 = returns[returns <= np.percentile(returns, 5)].mean() * 100 # Expected Shortfall
-    
-    return paths, var_95, var_99, cvar_95
-
-def send_automated_webhook_alert(platform: str, webhook_url: str, message: str, bot_token: str = None, chat_id: str = None):
-    """Dispatches asynchronous alerts to Discord or Telegram."""
-    try:
-        if platform == "Discord":
-            payload = {"content": f"🚨 **AI Crypto Predictor Alert** 🚨\n{message}"}
-            res = requests.post(webhook_url, json=payload, timeout=5)
-            return res.status_code in [200, 204]
-        elif platform == "Telegram":
-            tg_url = f"https://api.telegram.org/bot{bot_token}/sendMessage"
-            payload = {"chat_id": chat_id, "text": f"🚨 AI Crypto Predictor Alert 🚨\n\n{message}", "parse_mode": "Markdown"}
-            res = requests.post(tg_url, json=payload, timeout=5)
-            return res.status_code == 200
-    except Exception as e:
-        print(f"Webhook Error: {e}")
-        return False
-    return False
-
-def get_rag_realtime_context(symbol: str) -> str:
-    """Builds a real-time retrieval-augmented context bundle to ground the AI Copilot."""
-    m_data = get_real_market_data(symbol, 20)
-    macro = fetch_macro_economic_engine()
-    news = fetch_crypto_news(symbol)
-    headline_snippet = " | ".join([n['title'] for n in news[:3]]) if news else "General market consolidation."
-    
-    rag_doc = (
-        f"REAL-TIME RAG CONTEXT FOR {symbol}:\n"
-        f"- Spot Price: {format_crypto_price(m_data['current_price'])}\n"
-        f"- 20D Prediction: {format_crypto_price(m_data['predictions'][-1])}\n"
-        f"- Stop-Loss Floor (P10): {format_crypto_price(m_data['lower_bound_10'][-1])}\n"
-        f"- Take-Profit Ceiling (P90): {format_crypto_price(m_data['upper_bound_90'][-1])}\n"
-        f"- Macro Environment: DXY at {macro['dxy_price']} ({macro['dxy_change']:+.2f}%), 10Y Yield at {macro['tnx_yield']}%, S&P 500 Correlation: {macro['spx_corr']}\n"
-        f"- Fed Liquidity: ${macro['fed_net_liquidity']}T ({macro['fed_liq_trend']})\n"
-        f"- Breaking Headlines: {headline_snippet}\n"
-    )
-    return rag_doc
-
-# ==============================================================================
-# --- DEEP COIN DOSSIER ENGINE (HONEST, UNBIASED KNOWLEDGE LOOKUP) ---
-# ==============================================================================
-def get_coin_deep_dossier(symbol: str) -> dict:
-    """
-    Returns authentic, rigorous, and truthful historical and architectural intelligence for any chosen cryptocurrency.
-    """
-    sym = symbol.split("-")[0].upper()
-    
-    profiles = {
-        "BTC": {
-            "name": "Bitcoin",
-            "founder": "Satoshi Nakamoto (Pseudonymous entity)",
-            "genesis": "January 3, 2009 (Genesis Block mined)",
-            "architecture": "SHA-256 Proof-of-Work (PoW) with Nakamoto Consensus, UTXO transaction model, and fixed 21 million maximum supply cap.",
-            "purpose": "Engineered directly in response to the 2008 global financial meltdown to establish a decentralized, censorship-resistant peer-to-peer electronic cash system that operates without central banks, intermediaries, or fractional-reserve debasement.",
-            "history_demand": "Progressed from a cypherpunk experiment used for pizza transactions into a trillions-dollar global macroeconomic asset. Survived exchange hacks (Mt. Gox), regulatory bans, and multiple 80%+ drawdowns before achieving sovereign reserve adoption (El Salvador) and multi-billion-dollar Wall Spot ETF institutional inflows.",
-            "future_demand": "Solidifying its status as 'Digital Gold' and sovereign treasury collateral. Structural demand is driven by quadrennial supply halvings and fiat liquidity debasement. Honest Reality/Risks: Limited base-layer transaction throughput (3-7 TPS), energy consumption debates, and potential quantum-computing key security hurdles over 10-20 year horizons."
-        },
-        "ETH": {
-            "name": "Ethereum",
-            "founder": "Vitalik Buterin, Gavin Wood, Charles Hoskinson, Anthony Di Iorio, Joseph Lubin",
-            "genesis": "July 30, 2015 (Olympic release)",
-            "architecture": "Turing-complete Ethereum Virtual Machine (EVM), transitioned from Ethash PoW to Proof-of-Stake (PoS) via 'The Merge' in 2022, with EIP-1559 base fee burning.",
-            "purpose": "To create a decentralized global computer capable of executing autonomous smart contracts, programmable decentralized finance (DeFi), and censorship-resistant applications without relying on trusted third parties.",
-            "history_demand": "Pioneered the 2017 Initial Coin Offering (ICO) craze, the 2020 DeFi Summer, and the 2021 NFT explosion. Survived the historic DAO hack (which forked Ethereum and Ethereum Classic).",
-            "future_demand": "Primary economic hub for institutional staking and Layer-2 rollups. Honest Reality/Risks: Layer-1 transaction gas fees can spike severely during high network load; Layer-2 networks capture fees away from the main chain; and high-throughput chains (e.g., Solana) aggressively contest consumer mindshare."
-        }
-    }
-    
-    # Generic accurate dossier for any other coin in the 100 pool
-    if sym in profiles:
-        return profiles[sym]
-    
-    # Lookup coin details from list
-    coin_meta = next((c for c in COIN_100_LIST if c["symbol"] == sym), {"name": sym, "rank": 99})
-    return {
-        "name": coin_meta["name"],
-        "founder": f"{coin_meta['name']} Core Contributors & Decentralized Foundation",
-        "genesis": "Active on mainnet within the institutional Top-100 market pool.",
-        "architecture": "Secured via modern decentralized consensus (Proof-of-Stake / Layer-2 Rollup / DAG architecture) with optimized cryptoeconomic staking incentives.",
-        "purpose": f"Created to solve structural decentralization, transactional scalability, and programmatic liquidity challenges within the {coin_meta['name']} digital ecosystem.",
-        "history_demand": f"Ascended into the top 100 digital assets through verifiable developer activity, on-chain liquidity velocity, and continuous exchange market-making depth across both spot and perpetual futures.",
-        "future_demand": f"Driven by growing Web3 ecosystem adoption, institutional capital rotation, and technological scaling upgrades. Honest Reality/Risks: High beta correlation with Bitcoin macro liquidity; ongoing competition from rival blockchain architectures; and market volatility driven by regulatory shifts and macro interest rate policy."
-    }
-
 # --- BACKTESTING SIMULATOR ---
 def run_strategy_backtest(df: pd.DataFrame, initial_capital: float = 10000.0, fee_pct: float = 0.001):
     df = df.copy()
@@ -867,7 +689,7 @@ def run_strategy_backtest(df: pd.DataFrame, initial_capital: float = 10000.0, fe
                 "Exit Date": date.strftime("%Y-%m-%d"),
                 f"Entry Price ({curr_sym})": format_crypto_price(entry_price),
                 f"Exit Price ({curr_sym})": format_crypto_price(price),
-                f"PnL ({curr_sym})": round(pnl * curr_rate, 2), # Adjusted PnL calculation strictly for log display
+                f"PnL ({curr_sym})": round(pnl * curr_rate, 2), 
                 "Return (%)": round(ret_pct, 2)
             })
             holdings = 0.0
@@ -989,180 +811,402 @@ def generate_pdf_report(symbol, current_p, target_p, lower_p10, upper_p90, horiz
 # --- PAGE 1: AUTH SCREEN ---
 # ==============================================================================
 def auth_screen():
-    st.markdown(f"""
-<style>
-/* App background */
-.stApp {{
-background: linear-gradient(rgba(4, 9, 20, 0.7), rgba(4, 9, 20, 0.8)), 
-url('https://images.unsplash.com/photo-1621416894569-0f39ed31d247?q=80&w=2000&auto=format&fit=crop') center/cover no-repeat fixed !important;
-}}
-/* Main container */
-[data-testid="block-container"] {{
-max-width: 1200px !important;
-padding-top: 12vh !important;
-}}
-/* Hide top padding and header */
-header[data-testid="stHeader"] {{
-display: none !important;
-}}
-/* The Card (Tabs container) */
-[data-testid="stTabs"] {{
-background: rgba(13, 20, 36, 0.4) !important;
-backdrop-filter: blur(12px) !important;
--webkit-backdrop-filter: blur(12px) !important;
-border: 1.5px solid rgba(29, 233, 182, 0.6) !important;
-border-radius: 16px !important;
-padding: 35px 35px !important;
-box-shadow: 0 0 40px rgba(29, 233, 182, 0.15), inset 0 0 20px rgba(29, 233, 182, 0.05) !important;
-}}
-/* Tabs styling */
-[data-testid="stTabs"] button {{
-background-color: transparent !important;
-color: #64748b !important;
-border: none !important;
-font-weight: 600 !important;
-font-size: 16px !important;
-padding-bottom: 10px !important;
-margin-right: 20px !important;
-}}
-[data-testid="stTabs"] button[aria-selected="true"] {{
-color: #1de9b6 !important;
-border-bottom: 3px solid #1de9b6 !important;
-}}
-[data-testid="stTabs"] div[data-baseweb="tab-highlight"] {{
-display: none !important;
-}}
-/* Input Fields - FIXED DYNAMIC THEME */
-[data-testid="stTextInput"] label {{
-display: none !important; 
-}}
-[data-testid="stTextInput"] div[data-baseweb="baseInput"],
-[data-testid="stTextInput"] div[data-baseweb="input"] {{
-background-color: rgba(4, 9, 20, 0.6) !important;
-border: 1px solid rgba(255, 255, 255, 0.1) !important;
-border-radius: 8px !important;
-transition: border 0.3s ease !important;
-}}
-[data-testid="stTextInput"] div[data-baseweb="input"]:focus-within {{
-border: 1px solid #1de9b6 !important;
-box-shadow: 0 0 8px rgba(29, 233, 182, 0.3) !important;
-}}
-[data-testid="stTextInput"] input {{
-color: #ffffff !important;
--webkit-text-fill-color: #ffffff !important;
-background-color: transparent !important;
-padding: 14px 16px !important;
-font-size: 14px !important;
-}}
-[data-testid="stTextInput"] input::placeholder {{
-color: #64748b !important;
--webkit-text-fill-color: #64748b !important;
-}}
-/* Solid Cyan Button */
-[data-testid="stFormSubmitButton"] button {{
-background: linear-gradient(90deg, #187b64 0%, #209d82 100%) !important;
-border: 1px solid #23a98c !important;
-color: #ffffff !important;
-border-radius: 30px !important;
-font-weight: 600 !important;
-font-size: 16px !important;
-padding: 10px 0 !important;
-margin-top: 15px !important;
-transition: all 0.3s ease !important;
-width: 100% !important;
-box-shadow: 0 4px 15px rgba(29, 233, 182, 0.2) !important;
-}}
-[data-testid="stFormSubmitButton"] button:hover {{
-background: linear-gradient(90deg, #209d82 0%, #29c1a1 100%) !important;
-box-shadow: 0 4px 20px rgba(29, 233, 182, 0.4) !important;
-}}
-/* Remove Form Background */
-[data-testid="stForm"] {{
-border: none !important;
-background: transparent !important;
-padding: 0 !important;
-}}
-/* Toggle theme button styling */
-.st-key-auth_theme_btn > button {{
-    background: rgba(13, 20, 36, 0.6) !important;
-    border: 1px solid rgba(255, 255, 255, 0.15) !important;
-    border-radius: 30px !important;
-    color: white !important;
-    width: 100% !important;
-    margin-bottom: 15px !important;
-    font-weight: 500 !important;
-    padding: 6px 12px !important;
-}}
-/* Switch to register text styling */
-.st-key-switch_to_reg_btn > button {{
-    background: transparent !important;
-    border: none !important;
-    color: #8b949e !important;
-    font-size: 12px !important;
-    font-weight: 400 !important;
-    margin-top: 0px !important;
-    box-shadow: none !important;
-}}
-.st-key-switch_to_reg_btn > button:hover {{
-    color: #1de9b6 !important;
-}}
-</style>
+    # 1. Inject the Three.js full-screen background iframe with height=0 to avoid layout shifting
+    components.html("""
+    <!DOCTYPE html>
+    <html lang="en">
+    <head>
+    <meta charset="UTF-8">
+    <script type="importmap">
+    { "imports": { "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js" } }
+    </script>
+    <style>
+        body { margin: 0; overflow: hidden; background: #0D0F12; }
+        .overlay { position: fixed; inset: 0; z-index: 1; background: linear-gradient(90deg, rgba(13,15,18,.95) 0%, rgba(13,15,18,.78) 48%, rgba(13,15,18,.72) 100%); pointer-events: none; }
+    </style>
+    </head>
+    <body>
+    <div id="three-bg"></div>
+    <div class="overlay"></div>
+    <script>
+    import("three").then((THREE) => {
+        const scene = new THREE.Scene();
+        const camera = new THREE.PerspectiveCamera(55, window.innerWidth / window.innerHeight, 0.1, 1000);
+        camera.position.z = 8;
+        const renderer = new THREE.WebGLRenderer({ alpha: true, antialias: true });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+        document.getElementById("three-bg").appendChild(renderer.domElement);
+        
+        const ambient = new THREE.AmbientLight(0xffffff, 1.5);
+        scene.add(ambient);
+        const goldLight = new THREE.PointLight(0xffc247, 40);
+        goldLight.position.set(3, 3, 5);
+        scene.add(goldLight);
+        const tealLight = new THREE.PointLight(0x00e599, 25);
+        tealLight.position.set(-4, -2, 3);
+        scene.add(tealLight);
 
-<!-- Top Right User Icon -->
-<div style="position: fixed; top: 20px; right: 20px; z-index: 999999;">
-    <div style="background: rgba(255,255,255,0.1); border-radius: 50%; width: 40px; height: 40px; display: flex; align-items: center; justify-content: center; border: 1px solid rgba(255,255,255,0.2);">
-        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></svg>
+        const coin = new THREE.Group();
+        scene.add(coin);
+        const goldMaterial = new THREE.MeshStandardMaterial({
+            color: 0xdba72e, metalness: 0.9, roughness: 0.25, emissive: 0x4a2900, emissiveIntensity: 0.3
+        });
+        const coinGeometry = new THREE.CylinderGeometry(1.35, 1.35, 0.16, 96);
+        const coinBody = new THREE.Mesh(coinGeometry, goldMaterial);
+        coinBody.rotation.x = Math.PI / 2;
+        coin.add(coinBody);
+        
+        const rim = new THREE.Mesh(
+            new THREE.TorusGeometry(1.3, 0.055, 12, 100),
+            new THREE.MeshStandardMaterial({ color: 0xffd56b, metalness: 1, roughness: 0.2 })
+        );
+        coin.add(rim);
+
+        const canvas = document.createElement("canvas");
+        canvas.width = 256;
+        canvas.height = 256;
+        const ctx = canvas.getContext("2d");
+        ctx.fillStyle = "#FFD56B";
+        ctx.font = "bold 175px Arial";
+        ctx.textAlign = "center";
+        ctx.textBaseline = "middle";
+        ctx.fillText("₿", 128, 135);
+        const texture = new THREE.CanvasTexture(canvas);
+        const symbol = new THREE.Mesh(
+            new THREE.PlaneGeometry(1.7, 1.7),
+            new THREE.MeshBasicMaterial({ map: texture, transparent: true, side: THREE.DoubleSide })
+        );
+        symbol.position.z = 0.095;
+        coin.add(symbol);
+
+        const particleCount = 180;
+        const positions = new Float32Array(particleCount * 3);
+        for (let i = 0; i < particleCount; i++) {
+            positions[i * 3] = (Math.random() - 0.5) * 18;
+            positions[i * 3 + 1] = (Math.random() - 0.5) * 12;
+            positions[i * 3 + 2] = (Math.random() - 0.5) * 5;
+        }
+        const particleGeometry = new THREE.BufferGeometry();
+        particleGeometry.setAttribute("position", new THREE.BufferAttribute(positions, 3));
+        const particleMaterial = new THREE.PointsMaterial({ color: 0x00e599, size: 0.035, transparent: true, opacity: 0.65 });
+        const particles = new THREE.Points(particleGeometry, particleMaterial);
+        scene.add(particles);
+
+        let frame = 0;
+        function animate() {
+            requestAnimationFrame(animate);
+            frame += 0.008;
+            coin.rotation.y = Math.sin(frame) * 0.35;
+            coin.rotation.x = Math.sin(frame * 0.6) * 0.15;
+            coin.position.y = Math.sin(frame * 1.3) * 0.15;
+            particles.rotation.y += 0.0004;
+            particles.rotation.x += 0.0002;
+            renderer.render(scene, camera);
+        }
+        animate();
+        
+        window.addEventListener("resize", () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        });
+    });
+    </script>
+    </body>
+    </html>
+    """, height=0)
+
+    # 2. Inject Parent CSS to stretch iframe, hide defaults, and style Streamlit widgets
+    st.markdown("""
+    <style>
+    /* Reset & Fonts */
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
+    
+    .stApp {
+        background: transparent !important;
+        font-family: 'Inter', sans-serif !important;
+    }
+    
+    header[data-testid="stHeader"] {
+        display: none !important;
+    }
+    
+    [data-testid="block-container"] {
+        max-width: 1400px !important;
+        padding-top: 40px !important;
+        padding-bottom: 70px !important;
+    }
+    
+    /* Force the iframe to be a full screen background */
+    iframe {
+        position: fixed !important;
+        top: 0 !important;
+        left: 0 !important;
+        width: 100vw !important;
+        height: 100vh !important;
+        z-index: -999 !important;
+        border: none !important;
+        pointer-events: none !important;
+    }
+    
+    /* NAV */
+    .nav-container {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        margin-bottom: 50px;
+    }
+    .nav-logo {
+        font-size: 23px;
+        font-weight: 800;
+        letter-spacing: -1px;
+        color: #F5F7FA;
+    }
+    .nav-logo span { color: #00E599; }
+    .nav-tag {
+        color: #00E599;
+        font-size: 12px;
+        border: 1px solid rgba(0,229,153,.3);
+        padding: 9px 15px;
+        border-radius: 30px;
+        background: rgba(0,229,153,.06);
+    }
+    
+    /* HERO SECTION */
+    .eyebrow {
+        display: inline-flex;
+        align-items: center;
+        gap: 10px;
+        color: #00E599;
+        background: rgba(0,229,153,.07);
+        border: 1px solid rgba(0,229,153,.2);
+        border-radius: 30px;
+        padding: 10px 16px;
+        font-size: 11px;
+        letter-spacing: 1.5px;
+        margin-bottom: 30px;
+        font-weight: 600;
+    }
+    .dot {
+        width: 7px;
+        height: 7px;
+        background: #00E599;
+        border-radius: 50%;
+        box-shadow: 0 0 12px #00E599;
+    }
+    .hero-h1 {
+        font-size: clamp(38px, 5vw, 68px);
+        line-height: 1.13;
+        font-weight: 800;
+        letter-spacing: -2.5px;
+        color: #F5F7FA;
+        margin: 0;
+    }
+    .hero-h1 span {
+        color: #00E599;
+        text-shadow: 0 0 30px rgba(0,229,153,.2);
+    }
+    .hero-subtitle {
+        margin-top: 24px;
+        color: #AAB2BD;
+        font-size: 13px;
+        line-height: 2;
+        letter-spacing: 1.3px;
+        max-width: 570px;
+        font-weight: 500;
+    }
+    .hero-tagline {
+        margin-top: 22px;
+        font-size: 19px;
+        font-weight: 600;
+        color: #F5F7FA;
+    }
+    .hero-tagline span { color: #00E599; }
+    .hero-badges {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 12px;
+        margin-top: 35px;
+    }
+    .hero-badge {
+        padding: 12px 16px;
+        border-radius: 8px;
+        border: 1px solid rgba(255,255,255,.1);
+        background: rgba(255,255,255,.04);
+        color: #D5DBE4;
+        font-size: 12px;
+        font-weight: 500;
+    }
+    .hero-badge strong { color: #00E599; }
+    
+    /* AUTH CARD MAP TO STREAMLIT */
+    [data-testid="stTabs"] {
+        padding: 38px !important;
+        border-radius: 20px !important;
+        border: 1px solid rgba(255,255,255,.12) !important;
+        background: rgba(22,26,31,.78) !important;
+        backdrop-filter: blur(22px) !important;
+        box-shadow: 0 25px 80px rgba(0,0,0,.4), 0 0 40px rgba(0,229,153,.04) !important;
+    }
+    
+    /* TABS */
+    [data-testid="stTabs"] > div:first-child {
+        background: #101419 !important;
+        border-radius: 10px !important;
+        padding: 5px !important;
+        margin-bottom: 28px !important;
+        display: flex !important;
+        gap: 0 !important;
+        border-bottom: none !important;
+    }
+    [data-testid="stTabs"] button[data-baseweb="tab"] {
+        padding: 12px !important;
+        border: none !important;
+        color: #9299A5 !important;
+        background: transparent !important;
+        border-radius: 7px !important;
+        font-size: 13px !important;
+        font-weight: 600 !important;
+        transition: .3s !important;
+        margin: 0 !important;
+        flex: 1 !important;
+    }
+    [data-testid="stTabs"] button[aria-selected="true"] {
+        color: #00E599 !important;
+        background: rgba(0,229,153,.12) !important;
+        box-shadow: 0 0 15px rgba(0,229,153,.08) !important;
+        border-bottom: none !important;
+    }
+    [data-testid="stTabs"] div[data-baseweb="tab-highlight"] { display: none !important; }
+    
+    /* FORM INPUTS */
+    [data-testid="stTextInput"] label { display: none !important; }
+    [data-testid="stTextInput"] div[data-baseweb="baseInput"],
+    [data-testid="stTextInput"] div[data-baseweb="input"] {
+        background-color: #101419 !important;
+        border: 1px solid rgba(255,255,255,.1) !important;
+        border-radius: 9px !important;
+        transition: .3s !important;
+    }
+    [data-testid="stTextInput"] div[data-baseweb="input"]:focus-within {
+        border-color: #00E599 !important;
+        box-shadow: 0 0 15px rgba(0,229,153,.1) !important;
+    }
+    [data-testid="stTextInput"] input {
+        color: white !important;
+        -webkit-text-fill-color: white !important;
+        padding: 15px !important;
+        font-size: 13px !important;
+    }
+    [data-testid="stTextInput"] input::placeholder {
+        color: #68717E !important;
+        -webkit-text-fill-color: #68717E !important;
+    }
+    
+    /* SUBMIT BUTTON */
+    [data-testid="stFormSubmitButton"] button {
+        width: 100% !important;
+        padding: 16px !important;
+        background: #00E599 !important;
+        color: #06150F !important;
+        border: none !important;
+        border-radius: 9px !important;
+        font-weight: 800 !important;
+        font-size: 13px !important;
+        transition: .3s !important;
+        box-shadow: 0 0 25px rgba(0,229,153,.15) !important;
+        margin-top: 10px !important;
+    }
+    [data-testid="stFormSubmitButton"] button:hover {
+        background: #40FFB8 !important;
+        transform: translateY(-2px) !important;
+        box-shadow: 0 0 30px rgba(0,229,153,.3) !important;
+    }
+    [data-testid="stForm"] { border: none !important; background: transparent !important; padding: 0 !important; }
+    
+    /* EXTRA AUTH TEXT */
+    .auth-header { margin-bottom: 28px; }
+    .auth-header h2 { font-size: 25px; margin: 0 0 10px 0; color: #F5F7FA; font-weight: 700; }
+    .auth-header p { color: #9299A5; font-size: 13px; margin: 0; font-weight: 500;}
+    .divider { text-align: center; color: #69727E; font-size: 11px; margin: 25px 0; font-weight: 600; letter-spacing: 1px;}
+    
+    /* REGISTER LINK */
+    .switch-link { text-align: center; margin-top: 15px; }
+    .switch-link a { color: #9299A5; font-size: 12px; text-decoration: none; font-weight: 500; transition: .3s; }
+    .switch-link a:hover { color: #00E599; }
+    
+    /* Toggle theme button styling */
+    .st-key-auth_theme_btn > button {
+        background: rgba(13, 20, 36, 0.6) !important;
+        border: 1px solid rgba(255, 255, 255, 0.15) !important;
+        border-radius: 30px !important;
+        color: white !important;
+        width: 100% !important;
+        margin-bottom: 15px !important;
+        font-weight: 500 !important;
+        padding: 6px 12px !important;
+    }
+    </style>
+    
+    <!-- Top Right User Icon -->
+    <div style="position: fixed; top: 20px; right: 20px; z-index: 999999;">
+        <div style="background: rgba(255,255,255,0.1); border-radius: 50%; width: 40px; height: 40px; display: flex; align-items: center; justify-content: center; border: 1px solid rgba(255,255,255,0.2);">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></svg>
+        </div>
     </div>
-</div>
-""", unsafe_allow_html=True)
+    """, unsafe_allow_html=True)
 
-    col1, col_spacer, col2 = st.columns([1.1, 0.1, 0.9])
-
+    # 3. RENDER UI 
+    st.markdown("""
+    <div class="nav-container">
+        <div class="nav-logo">CRYPT<span>O</span>AI.</div>
+        <div class="nav-tag">✦ AI POWERED PLATFORM</div>
+    </div>
+    """, unsafe_allow_html=True)
+    
+    col1, spacer, col2 = st.columns([1.2, 0.1, 0.9])
+    
     with col1:
         st.markdown("""
-<div style="font-family: 'Inter', 'Segoe UI', sans-serif; margin-top: 10px;">
-    <!-- Glowing Geometric Lion Logo -->
-    <div style="margin-bottom: 30px; filter: drop-shadow(0 0 10px rgba(29,233,182,0.8));">
-        <svg width="60" height="60" viewBox="0 0 24 24" fill="none" stroke="#1de9b6" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round">
-            <path d="M12 2L16 6H20V10L22 12L20 14V18H16L12 22L8 18H4V14L2 12L4 10V6H8L12 2Z"></path>
-            <path d="M12 2V22"></path>
-            <path d="M22 12H2"></path>
-            <path d="M16 6L8 18"></path>
-            <path d="M8 6L16 18"></path>
-        </svg>
-    </div>
-    <h1 style="color: #ffffff; font-weight: 800; font-size: 36px; line-height: 1.3; margin: 0; text-transform: uppercase;">
-        WELCOME TO AI-DRIVEN<br>CRYPTOCURRENCY PRICE PREDICTION
-    </h1>
-    <h2 style="color: #1de9b6; font-weight: 700; font-size: 24px; line-height: 1.3; margin: 15px 0 20px 0; text-transform: uppercase;">
-        USING PSO-OPTIMIZED<br>MULTIMODAL TFT WITH REAL-TIME<br>TRADING ANALYTICS
-    </h2>
-    <p style="color: #e2e8f0; font-size: 18px; font-weight: 400; margin-bottom: 35px;">
-        Data + AI = Smarter Investment
-    </p>
-</div>
-""", unsafe_allow_html=True)
-
-        st.markdown("""
-<div style="display: flex; gap: 15px; font-size: 14px; color: #a1a1aa; font-weight: 500;">
-    <span>[ <span style="color: #f59e0b;">🔶</span> Binance L2 Live ]</span>
-    <span>[ <span style="color: #3b82f6;">🔷</span> PyTorch Deep Learning ]</span>
-</div>
-""", unsafe_allow_html=True)
+        <div style="margin-top: 20px;">
+            <div class="eyebrow">
+                <span class="dot"></span> NEXT GENERATION CRYPTO ANALYTICS
+            </div>
+            <h1 class="hero-h1">
+                WELCOME TO <span>AI-DRIVEN</span><br>CRYPTOCURRENCY PRICE PREDICTION
+            </h1>
+            <p class="hero-subtitle">
+                USING PSO-OPTIMIZED MULTIMODAL TFT<br>WITH REAL-TIME TRADING ANALYTICS
+            </p>
+            <p class="hero-tagline">
+                Data + AI = <span>Smarter Investment.</span>
+            </p>
+            <div class="hero-badges">
+                <div class="hero-badge"><strong>●</strong> Binance L2 Live</div>
+                <div class="hero-badge"><strong>✦</strong> PyTorch Deep Learning</div>
+            </div>
+        </div>
+        """, unsafe_allow_html=True)
 
     with col2:
-        # Toggle Theme Button for the First Page
         st.button("🌓 Toggle Theme", on_click=toggle_theme, key="auth_theme_btn", use_container_width=True)
 
+        st.markdown("""
+        <div class="auth-header">
+            <h2 id="auth-title">Welcome Back</h2>
+            <p id="auth-desc">Login to explore crypto analytics.</p>
+        </div>
+        """, unsafe_allow_html=True)
+        
         tab_login, tab_reg = st.tabs(["Login", "Register"])
         db = SessionLocal()
 
         with tab_login:
             with st.form("login_form"):
-                email = st.text_input("Email", placeholder="✉️  Email")
-                password = st.text_input("Password", type="password", placeholder="🔒  Password")
-
-                submit = st.form_submit_button("Login")
+                email = st.text_input("Email", placeholder="Enter your email")
+                password = st.text_input("Password", type="password", placeholder="Enter your password")
+                submit = st.form_submit_button("LOGIN TO YOUR ACCOUNT →")
 
                 if submit:
                     user = db.query(User).filter(User.email == email).first()
@@ -1176,17 +1220,19 @@ padding: 0 !important;
                     else:
                         st.error("Invalid email or password.")
             
-            st.markdown("<br>", unsafe_allow_html=True)
-            if st.button("New user? Register here", key="switch_to_reg_btn", use_container_width=True):
-                st.session_state["switch_to_register"] = True
-                st.rerun()
+            st.markdown("""
+            <div class="switch-link">
+                <a href="#" onclick="window.parent.document.querySelectorAll('button[data-baseweb=\\'tab\\']')[1].click(); return false;">New user? Register here</a>
+            </div>
+            <div class="divider">SECURE ACCESS TO YOUR ANALYTICS</div>
+            """, unsafe_allow_html=True)
 
         with tab_reg:
             with st.form("register_form"):
-                new_name = st.text_input("Full Name", placeholder="👤  Full Name")
-                new_email = st.text_input("Email Address", placeholder="✉️  Email Address")
-                new_password = st.text_input("Create Password", type="password", placeholder="🔒  Create Password")
-                reg_submit = st.form_submit_button("Register")
+                new_name = st.text_input("Full Name", placeholder="Enter your full name")
+                new_email = st.text_input("Email Address", placeholder="Enter your email")
+                new_password = st.text_input("Create Password", type="password", placeholder="Create a password")
+                reg_submit = st.form_submit_button("CREATE ACCOUNT →")
 
                 if reg_submit:
                     if db.query(User).filter(User.email == new_email).first():
@@ -1207,27 +1253,38 @@ padding: 0 !important;
                         st.session_state["coin_selected"] = False
                         time.sleep(1)
                         st.rerun()
+                        
+            st.markdown("""
+            <div class="switch-link">
+                <a href="#" onclick="window.parent.document.querySelectorAll('button[data-baseweb=\\'tab\\']')[0].click(); return false;">Already have an account? Login here</a>
+            </div>
+            <div class="divider">SECURE ACCESS TO YOUR ANALYTICS</div>
+            """, unsafe_allow_html=True)
+            
         db.close()
         
-        if st.session_state.get("switch_to_register", False):
-            st.session_state["switch_to_register"] = False
-            components.html(
-                """
-                <script>
-                setTimeout(function() {
-                    const doc = window.parent.document;
-                    const tabs = doc.querySelectorAll('button[role="tab"], button[data-baseweb="tab"], div[data-testid="stTabs"] button');
-                    for(let i = 0; i < tabs.length; i++) {
-                        if(tabs[i].innerText.includes("Register")) {
-                            tabs[i].click();
-                            break;
-                        }
-                    }
-                }, 100);
-                </script>
-                """,
-                height=0, width=0
-            )
+        # Inject JavaScript to dynamically update Title and Description based on active tab
+        components.html("""
+        <script>
+        const updateText = () => {
+            const doc = window.parent.document;
+            const tabs = doc.querySelectorAll('button[data-baseweb="tab"]');
+            const title = doc.getElementById("auth-title");
+            const desc = doc.getElementById("auth-desc");
+            if(tabs && tabs.length > 1 && title && desc) {
+                if(tabs[0].getAttribute('aria-selected') === 'true') {
+                    title.innerText = "Welcome Back";
+                    desc.innerText = "Login to explore crypto analytics.";
+                } else {
+                    title.innerText = "Create Account";
+                    desc.innerText = "Register to access your prediction dashboard.";
+                }
+            }
+        };
+        // Watch for tab clicks
+        window.parent.document.addEventListener('click', () => { setTimeout(updateText, 50); });
+        </script>
+        """, height=0, width=0)
 
 if not st.session_state["logged_in"]:
     auth_screen()
@@ -1433,8 +1490,6 @@ with col_slider:
     forecast_horizon = st.slider("Horizon", min_value=1, max_value=90, key="forecast_horizon", label_visibility="collapsed")
 with col_inc:
     st.button("+", on_click=step_horizon, args=(1,), key="inc_hz")
-
-use_pso = st.sidebar.checkbox("Enable PSO Hyperparameter Optimization", value=True)
 
 # --- CRYPTO INVESTMENT GUIDE BUTTON IN SIDEBAR DIRECTLY ABOVE ARCHITECTURE INFO ---
 st.sidebar.markdown('<div class="st-key-sidebar_guide_btn">', unsafe_allow_html=True)
@@ -1845,6 +1900,8 @@ st.markdown(f"""
 # Session tracking for panels
 if "keep_about_coin" not in st.session_state:
     st.session_state["keep_about_coin"] = False
+if "show_sentiment_panel" not in st.session_state:
+    st.session_state["show_sentiment_panel"] = False
 
 # "About the Coin" Institutional Analysis Panel
 if show_about or st.session_state.get("keep_about_coin", False):
@@ -1961,18 +2018,18 @@ st.markdown("<br>", unsafe_allow_html=True)
 # ==============================================================================
 # --- MAIN NAVIGATION TABS: 5 Consolidated Categories ---
 # ==============================================================================
-t1, t2, t3, t4, t5 = st.tabs([
+t_overview, t_backtest, t_news, t_compare, t_alerts = st.tabs([
     "📊 Overview & AI Forecasts",
-    "🧠 AI Intelligence & Sentiment",
-    "📈 Strategy Backtesting & Risk",
-    "📉 Microstructure & Network Dynamics",
-    "⚖️ Portfolio & Smart Alerts"
+    "📈 Strategy Backtesting",
+    "📰 Latest News",
+    "🆚 Dual Asset Comparison",
+    "🔔 Alerts & Bots"
 ])
 
 # ------------------------------------------------------------------------------
 # TAB 1: 📊 Overview & AI Forecasts
 # ------------------------------------------------------------------------------
-with t1:
+with t_overview:
     # --- Live Real-Time Tracking ---
     # Custom CSS and HTML for the blinking live indicator
     blinking_header = f"""
@@ -2094,57 +2151,164 @@ with t1:
             fig_hist.update_layout(template=theme['plotly_template'], yaxis_title=f"Price ({curr_key})", height=500, margin=dict(l=20, r=20, t=30, b=20), xaxis=dict(gridcolor=theme['grid_color']), yaxis=dict(gridcolor=theme['grid_color']))
             st.plotly_chart(fig_hist, use_container_width=True)
 
-# ------------------------------------------------------------------------------
-# TAB 2: 🧠 AI Intelligence & Sentiment
-# ------------------------------------------------------------------------------
-with t2:
-    # --- Sentiment & NLP Engine ---
-    st.markdown(f"""
-    <div style="margin-bottom: 15px;">
-        <h3 style="margin: 0; color: {theme['text_main']}; font-weight: 700;">📰 Sentiment & NLP Engine</h3>
-        <p style="margin: 4px 0 0 0; color: {theme['text_sec']}; font-size: 13.5px;">
-            Scrapes real-time crypto news feeds and multimodal data (X/TikTok) to dynamically weight the model's directional confidence.
-        </p>
-    </div>
-    """, unsafe_allow_html=True)
-    
-    col_s1, col_s2, col_s3 = st.columns(3)
-    with col_s1:
-        st.markdown(f"<div style='font-size: 15px; font-weight: 600; color: {theme['text_main']}; margin-bottom: 10px;'>📈 Crypto Fear & Greed Index</div>", unsafe_allow_html=True)
-        st.markdown(f"""
-        <div style="background: {theme['accent_bg']}; border: 1px solid {theme['border']}; border-radius: 10px; padding: 16px;">
-            <div style="font-size: 12px; color: {theme['text_sec']}; font-weight: 600; margin-bottom: 4px;">Index Score</div>
-            <div style="font-size: 28px; font-weight: 700; color: {theme['text_main']}; margin-bottom: 8px;">74 <span style="font-size: 18px; color: {theme['text_sec']};">/ 100</span></div>
-            <div style="display: inline-block; background: rgba(46, 160, 67, 0.15); color: #3fb950; font-size: 12px; font-weight: 600; padding: 2px 8px; border-radius: 4px;">↑ Greed 🟢</div>
-        </div>
-        """, unsafe_allow_html=True)
-        st.progress(74 / 100)
+    # --- Sentiment & NLP Engine Button ---
+    st.markdown("<br>", unsafe_allow_html=True)
+    if st.button("📰 Sentiment & NLP Engine", key="btn_sentiment_panel", use_container_width=True):
+        st.session_state["show_sentiment_panel"] = not st.session_state.get("show_sentiment_panel", False)
+        st.rerun()
         
-    with col_s2:
-        st.markdown(f"<div style='font-size: 15px; font-weight: 600; color: {theme['text_main']}; margin-bottom: 10px;'>🐦 Multimodal Social Sentiment</div>", unsafe_allow_html=True)
+    if st.session_state.get("show_sentiment_panel", False):
+        st.markdown("---")
         st.markdown(f"""
-        <div style="color: {theme['text_main']}; font-size: 14px; line-height: 2.0;">
-            • <b>X (Twitter) $Cashtags:</b> Bullish (78%)<br>
-            • <b>TikTok Trend Vectors:</b> Bullish Momentum<br>
-            • <b>Volume (24h):</b> 24,195 Mentions
+        <div style="margin-bottom: 15px;">
+            <h3 style="margin: 0; color: {theme['text_main']}; font-weight: 700;">📰 Sentiment & NLP Engine</h3>
+            <p style="margin: 4px 0 0 0; color: {theme['text_sec']}; font-size: 13.5px;">
+                Scrapes real-time crypto news feeds and multimodal data (X/TikTok) to dynamically weight the model's directional confidence.
+            </p>
         </div>
         """, unsafe_allow_html=True)
         
-    with col_s3:
-        st.markdown(f"<div style='font-size: 15px; font-weight: 600; color: {theme['text_main']}; margin-bottom: 10px;'>⚖️ Model Confidence Weighting</div>", unsafe_allow_html=True)
-        st.markdown(f"""
-        <div style="color: {theme['text_main']}; font-size: 14px; line-height: 2.0; margin-bottom: 15px;">
-            • <b>FinBERT (News):</b> Bullish (84%)<br>
-            • <b>Overall NLP Consensus:</b> Bullish
-        </div>
-        <div style="background: {theme['accent_bg']}; border: 1px solid {theme['border']}; border-radius: 10px; padding: 16px;">
-            <div style="font-size: 12px; color: {theme['text_sec']}; font-weight: 600; margin-bottom: 4px;">Directional Weight Adjustment</div>
-            <div style="font-size: 24px; font-weight: 700; color: {theme['text_main']}; margin-bottom: 8px;">+2.4% Bias</div>
-            <div style="display: inline-block; background: rgba(46, 160, 67, 0.15); color: #3fb950; font-size: 12px; font-weight: 600; padding: 2px 8px; border-radius: 4px;">↑ +0.5% vs 1h ago</div>
-        </div>
-        """, unsafe_allow_html=True)
-    st.markdown("---")
+        col_s1, col_s2, col_s3 = st.columns(3)
+        with col_s1:
+            st.markdown(f"<div style='font-size: 15px; font-weight: 600; color: {theme['text_main']}; margin-bottom: 10px;'>📈 Crypto Fear & Greed Index</div>", unsafe_allow_html=True)
+            st.markdown(f"""
+            <div style="background: {theme['accent_bg']}; border: 1px solid {theme['border']}; border-radius: 10px; padding: 16px;">
+                <div style="font-size: 12px; color: {theme['text_sec']}; font-weight: 600; margin-bottom: 4px;">Index Score</div>
+                <div style="font-size: 28px; font-weight: 700; color: {theme['text_main']}; margin-bottom: 8px;">74 <span style="font-size: 18px; color: {theme['text_sec']};">/ 100</span></div>
+                <div style="display: inline-block; background: rgba(46, 160, 67, 0.15); color: #3fb950; font-size: 12px; font-weight: 600; padding: 2px 8px; border-radius: 4px;">↑ Greed 🟢</div>
+            </div>
+            """, unsafe_allow_html=True)
+            st.progress(74 / 100)
+            
+        with col_s2:
+            st.markdown(f"<div style='font-size: 15px; font-weight: 600; color: {theme['text_main']}; margin-bottom: 10px;'>🐦 Multimodal Social Sentiment</div>", unsafe_allow_html=True)
+            st.markdown(f"""
+            <div style="color: {theme['text_main']}; font-size: 14px; line-height: 2.0;">
+                • <b>X (Twitter) $Cashtags:</b> Bullish (78%)<br>
+                • <b>TikTok Trend Vectors:</b> Bullish Momentum<br>
+                • <b>Volume (24h):</b> 24,195 Mentions
+            </div>
+            """, unsafe_allow_html=True)
+            
+        with col_s3:
+            st.markdown(f"<div style='font-size: 15px; font-weight: 600; color: {theme['text_main']}; margin-bottom: 10px;'>⚖️ Model Confidence Weighting</div>", unsafe_allow_html=True)
+            st.markdown(f"""
+            <div style="color: {theme['text_main']}; font-size: 14px; line-height: 2.0; margin-bottom: 15px;">
+                • <b>FinBERT (News):</b> Bullish (84%)<br>
+                • <b>Overall NLP Consensus:</b> Bullish
+            </div>
+            <div style="background: {theme['accent_bg']}; border: 1px solid {theme['border']}; border-radius: 10px; padding: 16px;">
+                <div style="font-size: 12px; color: {theme['text_sec']}; font-weight: 600; margin-bottom: 4px;">Directional Weight Adjustment</div>
+                <div style="font-size: 24px; font-weight: 700; color: {theme['text_main']}; margin-bottom: 8px;">+2.4% Bias</div>
+                <div style="display: inline-block; background: rgba(46, 160, 67, 0.15); color: #3fb950; font-size: 12px; font-weight: 600; padding: 2px 8px; border-radius: 4px;">↑ +0.5% vs 1h ago</div>
+            </div>
+            """, unsafe_allow_html=True)
+        st.markdown("---")
 
+        st.markdown(f"""
+        <div style="display: flex; justify-content: space-between; align-items: flex-end; margin-bottom: 15px;">
+            <div>
+                <h3 style="margin: 0; color: {theme['text_main']}; font-weight: 700;">🧠 Interpretability & Feature Attribution Engine</h3>
+                <p style="margin: 4px 0 0 0; color: {theme['text_sec']}; font-size: 13.5px;">
+                    Multi-level explainability powered by TFT Variable Selection Networks (VSN) and Multi-Head Self-Attention.
+                </p>
+            </div>
+            <div style="background: rgba(0, 240, 255, 0.1); border: 1px solid #00f0ff; border-radius: 20px; padding: 4px 12px; font-size: 12px; font-weight: 600; color: #00f0ff;">
+                ST-GNN + TFT Active
+            </div>
+        </div>
+        """, unsafe_allow_html=True)
+
+        kpi_col1, kpi_col2, kpi_col3, kpi_col4 = st.columns(4)
+        with kpi_col1:
+            st.markdown(f"""<div style="background: {theme['accent_bg']}; border: 1px solid {theme['border']}; border-radius: 10px; padding: 14px 16px;">
+                <div style="font-size: 11px; text-transform: uppercase; color: {theme['text_sec']}; font-weight: 700;">Dominant Variable</div>
+                <div style="font-size: 20px; font-weight: 700; color: #00f0ff; margin-top: 4px;">MACD <span style="font-size: 12px; color: #3fb950;">(32.4%)</span></div>
+            </div>""", unsafe_allow_html=True)
+        with kpi_col2:
+            st.markdown(f"""<div style="background: {theme['accent_bg']}; border: 1px solid {theme['border']}; border-radius: 10px; padding: 14px 16px;">
+                <div style="font-size: 11px; text-transform: uppercase; color: {theme['text_sec']}; font-weight: 700;">Key Lookback Horizon</div>
+                <div style="font-size: 20px; font-weight: 700; color: {theme['text_main']}; margin-top: 4px;">t-7 to t-14 Days</div>
+            </div>""", unsafe_allow_html=True)
+        with kpi_col3:
+            st.markdown(f"""<div style="background: {theme['accent_bg']}; border: 1px solid {theme['border']}; border-radius: 10px; padding: 14px 16px;">
+                <div style="font-size: 11px; text-transform: uppercase; color: {theme['text_sec']}; font-weight: 700;">Features Analyzed</div>
+                <div style="font-size: 20px; font-weight: 700; color: {theme['text_main']}; margin-top: 4px;">18 Signals</div>
+            </div>""", unsafe_allow_html=True)
+        with kpi_col4:
+            st.markdown(f"""<div style="background: {theme['accent_bg']}; border: 1px solid {theme['border']}; border-radius: 10px; padding: 14px 16px;">
+                <div style="font-size: 11px; text-transform: uppercase; color: {theme['text_sec']}; font-weight: 700;">Interpretability Score</div>
+                <div style="font-size: 20px; font-weight: 700; color: #2ea043; margin-top: 4px;">94.8% Fidelity</div>
+            </div>""", unsafe_allow_html=True)
+
+        st.markdown("<br>", unsafe_allow_html=True)
+        viz_col_left, viz_col_right = st.columns([1.1, 0.9])
+        with viz_col_left:
+            st.markdown("#### 📊 Global VSN Feature Importance")
+            vsn_data = pd.DataFrame({
+                "Feature": ["MACD Histogram", "RSI (14D)", "Bollinger Width", "FinBERT Prob", "Whale Volume", "BTC Dominance"],
+                "Importance": [32.4, 21.8, 14.2, 28.5, 24.1, 16.5]
+            }).sort_values(by="Importance", ascending=True)
+            fig_vsn = px.bar(vsn_data, x="Importance", y="Feature", orientation="h", color="Importance", color_continuous_scale="Viridis")
+            fig_vsn.update_layout(template=theme['plotly_template'], height=380, margin=dict(l=10, r=20, t=10, b=20))
+            st.plotly_chart(fig_vsn, use_container_width=True)
+        with viz_col_right:
+            st.markdown("#### ⏳ Temporal Attention Lookback Weights")
+            lookback_steps = [f"t-{i}" for i in range(30, 0, -1)]
+            attention_weights = (np.linspace(0.015, 0.045, 30) + np.array([0.08 if i in [2, 9, 16, 23] else 0.0 for i in range(30)])) * 100
+            fig_temporal = go.Figure()
+            fig_temporal.add_trace(go.Bar(x=lookback_steps, y=attention_weights, marker_color="#00f0ff"))
+            fig_temporal.update_layout(template=theme['plotly_template'], height=380, margin=dict(l=10, r=20, t=10, b=20), xaxis=dict(tickangle=-45))
+            st.plotly_chart(fig_temporal, use_container_width=True)
+            
+        if st.button("❌ Close Sentiment Panel"):
+            st.session_state["show_sentiment_panel"] = False
+            st.rerun()
+
+# ------------------------------------------------------------------------------
+# TAB 2: 📈 Strategy Backtesting
+# ------------------------------------------------------------------------------
+with t_backtest:
+    # --- Backtesting & Simulator ---
+    st.subheader(f"📈 Quantitative Strategy Backtesting & PnL Simulator ({selected_symbol})")
+    bt_col1, bt_col2, bt_col3 = st.columns(3)
+    initial_cap = bt_col1.number_input(f"Starting Capital ({curr_sym})", min_value=100.0, value=10000.0, step=500.0)
+    lookback_window = bt_col2.selectbox("Historical Lookback Period", [30, 60, 90, 180], index=1)
+    fee_rate = bt_col3.selectbox("Exchange Fee per Trade (%)", [0.05, 0.1, 0.2], index=1) / 100.0
+    
+    hist_ticker = yf.Ticker(selected_symbol)
+    bt_raw_df = hist_ticker.history(period=f"{lookback_window + 30}d")
+    
+    if not bt_raw_df.empty and len(bt_raw_df) > lookback_window:
+        bt_slice = bt_raw_df.iloc[-lookback_window:].copy()
+        bt_results_df, metrics, trade_log = run_strategy_backtest(bt_slice, initial_capital=initial_cap, fee_pct=fee_rate)
+        
+        m_c1, m_c2, m_c3, m_c4 = st.columns(4)
+        m_c1.metric("Total AI Strategy Return", f"{metrics['Strategy Return (%)']:+.2f}%", f"Final: {curr_sym}{metrics['Final Strategy Value']:,.2f}")
+        m_c2.metric("Alpha (vs. Buy & Hold)", f"{metrics['Alpha (%)']:+.2f}%", f"Benchmark: {metrics['Benchmark Return (%)']:+.2f}%")
+        m_c3.metric("Annualized Sharpe Ratio", f"{metrics['Sharpe Ratio']:.2f}", "Risk-Adjusted Return")
+        m_c4.metric("Maximum Drawdown (MDD)", f"-{metrics['Max Drawdown (%)']:.2f}%", "Downside Risk Peak-to-Trough", delta_color="inverse")
+        
+        st.markdown("<br>", unsafe_allow_html=True)
+        st.markdown(" 📊 Cumulative Portfolio Equity Growth")
+        fig_equity = go.Figure()
+        fig_equity.add_trace(go.Scatter(x=bt_results_df.index, y=bt_results_df['Strategy_Equity'], mode='lines', line=dict(color='#00F0FF', width=3), name='🤖 AI Model Strategy'))
+        fig_equity.add_trace(go.Scatter(x=bt_results_df.index, y=bt_results_df['Benchmark_Equity'], mode='lines', line=dict(color='#8b949e', width=2, dash='dash'), name='Passive Buy & Hold'))
+        fig_equity.update_layout(template=theme['plotly_template'], xaxis_title="Date", yaxis_title=f"Portfolio Value ({curr_sym})", hovermode="x unified", height=450, margin=dict(l=20, r=20, t=30, b=20), xaxis=dict(gridcolor=theme['grid_color']), yaxis=dict(gridcolor=theme['grid_color']))
+        st.plotly_chart(fig_equity, use_container_width=True)
+        
+        st.markdown(" 📋 Simulated Trade Execution Log")
+        if trade_log:
+            st.dataframe(pd.DataFrame(trade_log), use_container_width=True)
+        else:
+            st.info("The model remained in cash or held a single position during this lookback window to minimize market volatility.")
+    else:
+        st.warning("Insufficient historical data to run backtest simulation for this asset window.")
+
+# ------------------------------------------------------------------------------
+# TAB 3: 📰 Latest News
+# ------------------------------------------------------------------------------
+with t_news:
     # --- Latest News ---
     st.markdown(f"""
     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
@@ -2190,237 +2354,11 @@ with t2:
         f'</div>'
     )
     st.markdown(complete_container, unsafe_allow_html=True)
-    st.markdown("---")
-
-    # --- Explainability ---
-    st.markdown(f"""
-    <div style="display: flex; justify-content: space-between; align-items: flex-end; margin-bottom: 15px;">
-        <div>
-            <h3 style="margin: 0; color: {theme['text_main']}; font-weight: 700;">🧠 Interpretability & Feature Attribution Engine</h3>
-            <p style="margin: 4px 0 0 0; color: {theme['text_sec']}; font-size: 13.5px;">
-                Multi-level explainability powered by TFT Variable Selection Networks (VSN) and Multi-Head Self-Attention.
-            </p>
-        </div>
-        <div style="background: rgba(0, 240, 255, 0.1); border: 1px solid #00f0ff; border-radius: 20px; padding: 4px 12px; font-size: 12px; font-weight: 600; color: #00f0ff;">
-            ST-GNN + TFT Active
-        </div>
-    </div>
-    """, unsafe_allow_html=True)
-
-    kpi_col1, kpi_col2, kpi_col3, kpi_col4 = st.columns(4)
-    with kpi_col1:
-        st.markdown(f"""<div style="background: {theme['accent_bg']}; border: 1px solid {theme['border']}; border-radius: 10px; padding: 14px 16px;">
-            <div style="font-size: 11px; text-transform: uppercase; color: {theme['text_sec']}; font-weight: 700;">Dominant Variable</div>
-            <div style="font-size: 20px; font-weight: 700; color: #00f0ff; margin-top: 4px;">MACD <span style="font-size: 12px; color: #3fb950;">(32.4%)</span></div>
-        </div>""", unsafe_allow_html=True)
-    with kpi_col2:
-        st.markdown(f"""<div style="background: {theme['accent_bg']}; border: 1px solid {theme['border']}; border-radius: 10px; padding: 14px 16px;">
-            <div style="font-size: 11px; text-transform: uppercase; color: {theme['text_sec']}; font-weight: 700;">Key Lookback Horizon</div>
-            <div style="font-size: 20px; font-weight: 700; color: {theme['text_main']}; margin-top: 4px;">t-7 to t-14 Days</div>
-        </div>""", unsafe_allow_html=True)
-    with kpi_col3:
-        st.markdown(f"""<div style="background: {theme['accent_bg']}; border: 1px solid {theme['border']}; border-radius: 10px; padding: 14px 16px;">
-            <div style="font-size: 11px; text-transform: uppercase; color: {theme['text_sec']}; font-weight: 700;">Features Analyzed</div>
-            <div style="font-size: 20px; font-weight: 700; color: {theme['text_main']}; margin-top: 4px;">18 Signals</div>
-        </div>""", unsafe_allow_html=True)
-    with kpi_col4:
-        st.markdown(f"""<div style="background: {theme['accent_bg']}; border: 1px solid {theme['border']}; border-radius: 10px; padding: 14px 16px;">
-            <div style="font-size: 11px; text-transform: uppercase; color: {theme['text_sec']}; font-weight: 700;">Interpretability Score</div>
-            <div style="font-size: 20px; font-weight: 700; color: #2ea043; margin-top: 4px;">94.8% Fidelity</div>
-        </div>""", unsafe_allow_html=True)
-
-    st.markdown("<br>", unsafe_allow_html=True)
-    viz_col_left, viz_col_right = st.columns([1.1, 0.9])
-    with viz_col_left:
-        st.markdown("#### 📊 Global VSN Feature Importance")
-        vsn_data = pd.DataFrame({
-            "Feature": ["MACD Histogram", "RSI (14D)", "Bollinger Width", "FinBERT Prob", "Whale Volume", "BTC Dominance"],
-            "Importance": [32.4, 21.8, 14.2, 28.5, 24.1, 16.5]
-        }).sort_values(by="Importance", ascending=True)
-        fig_vsn = px.bar(vsn_data, x="Importance", y="Feature", orientation="h", color="Importance", color_continuous_scale="Viridis")
-        fig_vsn.update_layout(template=theme['plotly_template'], height=380, margin=dict(l=10, r=20, t=10, b=20))
-        st.plotly_chart(fig_vsn, use_container_width=True)
-    with viz_col_right:
-        st.markdown("#### ⏳ Temporal Attention Lookback Weights")
-        lookback_steps = [f"t-{i}" for i in range(30, 0, -1)]
-        attention_weights = (np.linspace(0.015, 0.045, 30) + np.array([0.08 if i in [2, 9, 16, 23] else 0.0 for i in range(30)])) * 100
-        fig_temporal = go.Figure()
-        fig_temporal.add_trace(go.Bar(x=lookback_steps, y=attention_weights, marker_color="#00f0ff"))
-        fig_temporal.update_layout(template=theme['plotly_template'], height=380, margin=dict(l=10, r=20, t=10, b=20), xaxis=dict(tickangle=-45))
-        st.plotly_chart(fig_temporal, use_container_width=True)
 
 # ------------------------------------------------------------------------------
-# TAB 3: 📈 Strategy Backtesting & Risk
+# TAB 4: 🆚 Dual Asset Comparison
 # ------------------------------------------------------------------------------
-with t3:
-    # --- Backtesting & Simulator ---
-    st.subheader(f"📈 Quantitative Strategy Backtesting & PnL Simulator ({selected_symbol})")
-    bt_col1, bt_col2, bt_col3 = st.columns(3)
-    initial_cap = bt_col1.number_input(f"Starting Capital ({curr_sym})", min_value=100.0, value=10000.0, step=500.0)
-    lookback_window = bt_col2.selectbox("Historical Lookback Period", [30, 60, 90, 180], index=1)
-    fee_rate = bt_col3.selectbox("Exchange Fee per Trade (%)", [0.05, 0.1, 0.2], index=1) / 100.0
-    
-    hist_ticker = yf.Ticker(selected_symbol)
-    bt_raw_df = hist_ticker.history(period=f"{lookback_window + 30}d")
-    
-    if not bt_raw_df.empty and len(bt_raw_df) > lookback_window:
-        bt_slice = bt_raw_df.iloc[-lookback_window:].copy()
-        bt_results_df, metrics, trade_log = run_strategy_backtest(bt_slice, initial_capital=initial_cap, fee_pct=fee_rate)
-        
-        m_c1, m_c2, m_c3, m_c4 = st.columns(4)
-        m_c1.metric("Total AI Strategy Return", f"{metrics['Strategy Return (%)']:+.2f}%", f"Final: {curr_sym}{metrics['Final Strategy Value']:,.2f}")
-        m_c2.metric("Alpha (vs. Buy & Hold)", f"{metrics['Alpha (%)']:+.2f}%", f"Benchmark: {metrics['Benchmark Return (%)']:+.2f}%")
-        m_c3.metric("Annualized Sharpe Ratio", f"{metrics['Sharpe Ratio']:.2f}", "Risk-Adjusted Return")
-        m_c4.metric("Maximum Drawdown (MDD)", f"-{metrics['Max Drawdown (%)']:.2f}%", "Downside Risk Peak-to-Trough", delta_color="inverse")
-        
-        st.markdown("<br>", unsafe_allow_html=True)
-        st.markdown(" 📊 Cumulative Portfolio Equity Growth")
-        fig_equity = go.Figure()
-        fig_equity.add_trace(go.Scatter(x=bt_results_df.index, y=bt_results_df['Strategy_Equity'], mode='lines', line=dict(color='#00F0FF', width=3), name='🤖 AI Model Strategy'))
-        fig_equity.add_trace(go.Scatter(x=bt_results_df.index, y=bt_results_df['Benchmark_Equity'], mode='lines', line=dict(color='#8b949e', width=2, dash='dash'), name='Passive Buy & Hold'))
-        fig_equity.update_layout(template=theme['plotly_template'], xaxis_title="Date", yaxis_title=f"Portfolio Value ({curr_sym})", hovermode="x unified", height=450, margin=dict(l=20, r=20, t=30, b=20), xaxis=dict(gridcolor=theme['grid_color']), yaxis=dict(gridcolor=theme['grid_color']))
-        st.plotly_chart(fig_equity, use_container_width=True)
-        
-        st.markdown(" 📋 Simulated Trade Execution Log")
-        if trade_log:
-            st.dataframe(pd.DataFrame(trade_log), use_container_width=True)
-        else:
-            st.info("The model remained in cash or held a single position during this lookback window to minimize market volatility.")
-    else:
-        st.warning("Insufficient historical data to run backtest simulation for this asset window.")
-    st.markdown("---")
-
-    # --- Benchmarks ---
-    st.subheader("🏆 Model Performance Benchmark Matrix")
-    
-    # Updated Benchmark Data replacing Random Forest, Gradient Boosting, and LSTM, with Dynamic Currency Math
-    benchmark_data = {
-        "Model Architecture": [
-            "CatBoost", 
-            "LightGBM", 
-            "TCN (Temporal Convolutional Networks)", 
-            "GRU Baseline", 
-            "PSO-TFT + ST-GNN (Ours)"
-        ],
-        f"MAE ({curr_sym})": [f"{245.20*curr_rate:.2f}", f"{234.10*curr_rate:.2f}", f"{165.00*curr_rate:.2f}", f"{150.70*curr_rate:.2f}", f"**{84.30*curr_rate:.2f}**"],
-        f"RMSE ({curr_sym})": [f"{269.90*curr_rate:.2f}", f"{259.70*curr_rate:.2f}", f"{182.80*curr_rate:.2f}", f"{160.20*curr_rate:.2f}", f"**{98.50*curr_rate:.2f}**"],
-        "SMAPE (%)": ["105.42", "102.81", "92.24", "87.12", "**4.12**"],
-        "Directional Accuracy (%)": ["36.99%", "50.68%", "51.43%", "48.57%", "**78.40%**"]
-    }
-    
-    df_benchmark = pd.DataFrame(benchmark_data)
-    
-    # Your existing display method (either st.table or st.dataframe) remains untouched below this:
-    st.dataframe(df_benchmark, use_container_width=True, hide_index=False)
-    
-    st.markdown("<br>", unsafe_allow_html=True)
-    st.subheader("🔬 Diebold-Mariano Statistical Significance Test")
-    dm_models = ["RF", "GBDT", "LSTM", "GRU", "PSO-TFT (Ours)"]
-    dm_matrix = np.array([
-        [1.000, 0.452, 0.112, 0.084, 0.001],
-        [0.452, 1.000, 0.205, 0.156, 0.002],
-        [0.112, 0.205, 1.000, 0.658, 0.014],
-        [0.084, 0.156, 0.658, 1.000, 0.021],
-        [0.001, 0.002, 0.014, 0.021, 1.000]
-    ])
-    fig_dm = px.imshow(dm_matrix, x=dm_models, y=dm_models, color_continuous_scale="RdBu_r", text_auto=".3f")
-    fig_dm.update_layout(template=theme['plotly_template'], height=420, margin=dict(l=20, r=20, t=30, b=20))
-    st.plotly_chart(fig_dm, use_container_width=True)
-    st.markdown("---")
-    
-    # --- MLOps & Model Drift ---
-    st.subheader("⚙️ Continuous MLOps Lifecycle & Data Drift Monitor")
-    d_col1, d_col2, d_col3, d_col4 = st.columns(4)
-    d_col1.metric("Active Model Version", st.session_state["model_version"], "Production Ready 🟢")
-    d_col2.metric("Last Retrained", st.session_state["last_retrain_time"], "Auto-Scheduled")
-    psi = st.session_state["drift_psi_score"]
-    drift_delta = "PSI < 0.10 🟢" if psi < 0.1 else ("PSI 0.10–0.20 🟡" if psi < 0.2 else "PSI > 0.20 🔴")
-    d_col3.metric("Data Drift Score (PSI)", f"{psi:.3f}", drift_delta)
-    d_col4.metric("Rolling 7D SMAPE", "4.38%", "+0.26% vs Baseline (4.12%)", delta_color="inverse")
-    
-    st.markdown("<br>", unsafe_allow_html=True)
-    m_col_left, m_col_right = st.columns([1, 1])
-    with m_col_left:
-        st.markdown(" 🔬 Feature-Level Drift Distribution Matrix")
-        drift_matrix_data = {
-            "Feature Name": ["Close (Price Action)", "Trade Volume", "FinBERT Bullish Prob", "RSI (14D)", "MACD Histogram"],
-            "Baseline Mean": [61420.0, 32150.0, 0.72, 54.2, 142.5],
-            "Current 7D Mean": [63056.0, 34800.0, 0.84, 68.2, 188.1],
-            "Drift Stat (p-value)": ["0.42 (Stable)", "0.38 (Stable)", "0.19 (Minor Shift)", "0.08 (Drift Watch)", "0.31 (Stable)"],
-            "Status": ["🟢 Healthy", "🟢 Healthy", "🟡 Shift", "🟡 Shift", "🟢 Healthy"]
-        }
-        st.dataframe(pd.DataFrame(drift_matrix_data), use_container_width=True)
-    with m_col_right:
-        st.markdown("🚀 Trigger Model Retraining Pipeline")
-        with st.form("retrain_form"):
-            new_epochs = st.slider("Retraining Epochs", min_value=10, max_value=100, value=30, step=10)
-            trigger_btn = st.form_submit_button("⚡ Execute Retraining Pipeline Now")
-            if trigger_btn:
-                status_box = st.empty()
-                prog_bar = st.progress(0)
-                pipeline_steps = [
-                    ("📥 Stage 1/5: Ingesting latest 30-day OHLCV data...", 0.20),
-                    ("🧠 Stage 2/5: Extracting FinBERT embeddings...", 0.45),
-                    ("🐝 Stage 3/5: Running Particle Swarm Optimization...", 0.70),
-                    ("🏋️ Stage 4/5: Retraining Temporal Fusion Transformer...", 0.90),
-                    ("📦 Stage 5/5: Registering new artifact in Model Registry...", 1.0)
-                ]
-                for step_text, prog_val in pipeline_steps:
-                    status_box.info(step_text)
-                    prog_bar.progress(prog_val)
-                    time.sleep(0.6)
-                st.session_state["last_retrain_time"] = datetime.utcnow().strftime("%d/%m/%Y %H:%M:%S UTC")
-                st.session_state["model_version"] = "v2.5.0-pso-tft"
-                st.session_state["drift_psi_score"] = 0.024
-                status_box.success("✅ Model retraining completed successfully!")
-                st.rerun()
-
-# ------------------------------------------------------------------------------
-# TAB 4: 📉 Microstructure & Network Dynamics
-# ------------------------------------------------------------------------------
-with t4:
-    # --- Cross-Currency Graph ---
-    st.subheader("🌐 Cross-Currency Graph & Spillover Network (Singh & Bhat, 2024)")
-    col_g1, col_g2, col_g3 = st.columns(3)
-    with col_g1:
-        st.metric("Systemic Market Beta (BTC Dominance)", "56.4%", "+0.8% High Coupling")
-    with col_g2:
-        st.metric(f"Dynamic Node Correlation ({selected_symbol.split('-')[0]} vs BTC)", "0.84", "High Spillover", delta_color="normal")
-    with col_g3:
-        st.metric("Lead-Lag Transmission Latency", "1.24s", "Sub-Minute Contagion")
-        
-    st.markdown("<br>", unsafe_allow_html=True)
-    st.markdown("📊 **Dynamic Inter-Asset Adjacency Matrix $\\mathbf{W}_t$ (Spatial Graph Attention)**")
-    
-    top10_short = ["BTC", "ETH", "SOL", "BNB", "XRP", "ADA", "AVAX", "DOGE", "LINK", "TRX"]
-    corr_matrix = np.array([
-        [1.00, 0.88, 0.82, 0.76, 0.71, 0.79, 0.81, 0.74, 0.83, 0.65],
-        [0.88, 1.00, 0.85, 0.79, 0.74, 0.81, 0.84, 0.70, 0.86, 0.68],
-        [0.82, 0.85, 1.00, 0.75, 0.72, 0.83, 0.88, 0.73, 0.80, 0.64],
-        [0.76, 0.79, 0.75, 1.00, 0.68, 0.73, 0.76, 0.66, 0.74, 0.62],
-        [0.71, 0.74, 0.72, 0.68, 1.00, 0.70, 0.73, 0.77, 0.69, 0.59],
-        [0.79, 0.81, 0.83, 0.73, 0.70, 1.00, 0.82, 0.72, 0.78, 0.67],
-        [0.81, 0.84, 0.88, 0.76, 0.73, 0.82, 1.00, 0.71, 0.81, 0.66],
-        [0.74, 0.70, 0.73, 0.66, 0.77, 0.72, 0.71, 1.00, 0.68, 0.61],
-        [0.83, 0.86, 0.80, 0.74, 0.69, 0.78, 0.81, 0.68, 1.00, 0.63],
-        [0.65, 0.68, 0.64, 0.62, 0.59, 0.67, 0.66, 0.61, 0.63, 1.00]
-    ])
-    
-    fig_heat = px.imshow(
-        corr_matrix,
-        x=top10_short,
-        y=top10_short,
-        color_continuous_scale="Viridis",
-        labels=dict(x="Asset Node", y="Asset Node", color="Spillover Weight"),
-        text_auto=".2f"
-    )
-    fig_heat.update_layout(template=theme['plotly_template'], height=480, margin=dict(l=20, r=20, t=30, b=20))
-    st.plotly_chart(fig_heat, use_container_width=True)
-
-# ------------------------------------------------------------------------------
-# TAB 5: ⚖️ Portfolio & Smart Alerts
-# ------------------------------------------------------------------------------
-with t5:
+with t_compare:
     # --- Dual Asset Comparison ---
     st.subheader(f"🆚 Dual Asset Comparison Mode: {selected_symbol} vs. Peer Asset")
     st.caption("Pits two cryptocurrencies side-by-side to directly compare their predicted multi-horizon alpha, volatility, and sentiment metrics.")
@@ -2456,8 +2394,11 @@ with t5:
     fig_comp.add_trace(go.Scatter(x=days_axis, y=norm_comp, mode='lines+markers', name=comp_symbol, line=dict(color='#F59E0B', width=3)))
     fig_comp.update_layout(template=theme['plotly_template'], xaxis_title="Future Days", yaxis_title="Relative Performance Index (100 = Base)", height=400, margin=dict(l=20, r=20, t=30, b=20))
     st.plotly_chart(fig_comp, use_container_width=True)
-    st.markdown("---")
 
+# ------------------------------------------------------------------------------
+# TAB 5: 🔔 Alerts & Bots
+# ------------------------------------------------------------------------------
+with t_alerts:
     # --- Alerts & Automated Bots ---
     st.subheader("🔔 Dynamic Threshold Engine & Automated Alert Bots")
     st.caption("Configure multi-variable async triggers and dispatch real-time alerts directly to Discord channels or Telegram bots.")
